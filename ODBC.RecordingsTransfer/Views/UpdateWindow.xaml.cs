@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using ODBC.RecordingsTransfer.Models;
 using ODBC.RecordingsTransfer.Services;
 
@@ -7,19 +8,80 @@ namespace ODBC.RecordingsTransfer.Views;
 public partial class UpdateWindow : Window
 {
     private readonly UpdateService _updateService;
-    private readonly UpdateInfo _update;
+    private readonly IReadOnlyList<UpdateInfo> _releases;
+    private UpdateInfo _selected;
     private CancellationTokenSource? _cts;
 
     public UpdateWindow(UpdateService updateService, UpdateInfo update)
+        : this(updateService, new[] { update }, update)
+    {
+    }
+
+    public UpdateWindow(
+        UpdateService updateService,
+        IReadOnlyList<UpdateInfo> releases,
+        UpdateInfo? preferred = null)
     {
         InitializeComponent();
         _updateService = updateService;
-        _update = update;
+        _releases = releases.Count > 0 ? releases : throw new ArgumentException("At least one release is required.", nameof(releases));
+        _selected = preferred ?? _releases.FirstOrDefault(r => r.IsNewer) ?? _releases.FirstOrDefault(r => !r.IsCurrent) ?? _releases[0];
 
-        VersionText.Text = $"Version {_update.Version} is available on the {_update.Channel} channel (you have {updateService.CurrentVersion}).";
-        ReleaseNotesText.Text = string.IsNullOrWhiteSpace(_update.ReleaseNotes)
+        var isBetaPicker = _releases.Count > 1 || _releases[0].Channel == UpdateChannel.Beta;
+        if (isBetaPicker)
+        {
+            Title = "Beta Releases";
+            TitleText.Text = "Beta Releases";
+            VersionPickerPanel.Visibility = Visibility.Visible;
+            VersionCombo.ItemsSource = _releases;
+            VersionCombo.SelectedItem = _selected;
+            VersionText.Text = $"You are running v{updateService.CurrentVersion}. Choose a compatible beta to install or roll back to.";
+        }
+        else
+        {
+            VersionText.Text =
+                $"Version {_selected.Version} is available on the {_selected.Channel} channel (you have {updateService.CurrentVersion}).";
+        }
+
+        ApplySelectedRelease();
+    }
+
+    private void VersionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (VersionCombo.SelectedItem is UpdateInfo info)
+        {
+            _selected = info;
+            ApplySelectedRelease();
+        }
+    }
+
+    private void ApplySelectedRelease()
+    {
+        ReleaseNotesText.Text = string.IsNullOrWhiteSpace(_selected.ReleaseNotes)
             ? "No release notes provided."
-            : _update.ReleaseNotes;
+            : StripCompatMarker(_selected.ReleaseNotes);
+
+        if (_selected.IsCurrent)
+        {
+            InstallButton.IsEnabled = false;
+            InstallButton.Content = "Already installed";
+            StatusText.Text = "This is the version you are running.";
+        }
+        else
+        {
+            InstallButton.IsEnabled = true;
+            InstallButton.Content = _selected.IsOlder ? "Download and Downgrade" : "Download and Install";
+            StatusText.Text = "";
+        }
+    }
+
+    private static string StripCompatMarker(string notes)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(
+            notes,
+            @"<!--\s*compat-min:\s*[0-9]+(?:\.[0-9]+){1,3}\s*-->",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
     }
 
     private void LaterButton_Click(object sender, RoutedEventArgs e)
@@ -30,17 +92,35 @@ public partial class UpdateWindow : Window
 
     private async void InstallButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_selected.IsCurrent)
+            return;
+
+        if (_selected.IsOlder)
+        {
+            var confirm = System.Windows.MessageBox.Show(
+                $"Install older beta v{_selected.Version}?\n\n" +
+                "Settings unknown to that build may be dropped the next time it saves config. " +
+                "Use this for testing rollbacks only.",
+                "Confirm Downgrade",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (confirm != MessageBoxResult.Yes)
+                return;
+        }
+
         LaterButton.IsEnabled = false;
         InstallButton.IsEnabled = false;
+        VersionCombo.IsEnabled = false;
         DownloadProgress.Visibility = Visibility.Visible;
-        StatusText.Text = "Downloading update...";
+        StatusText.Text = _selected.IsOlder ? "Downloading older build..." : "Downloading update...";
 
         _cts = new CancellationTokenSource();
 
         try
         {
             var progress = new Progress<double>(value => DownloadProgress.Value = value);
-            var installerPath = await _updateService.DownloadInstallerAsync(_update, progress, _cts.Token);
+            var installerPath = await _updateService.DownloadInstallerAsync(_selected, progress, _cts.Token);
 
             StatusText.Text = "Launching installer...";
             _updateService.LaunchInstaller(installerPath);
@@ -51,7 +131,8 @@ public partial class UpdateWindow : Window
         {
             StatusText.Text = "Download cancelled.";
             LaterButton.IsEnabled = true;
-            InstallButton.IsEnabled = true;
+            VersionCombo.IsEnabled = true;
+            ApplySelectedRelease();
             DownloadProgress.Visibility = Visibility.Collapsed;
         }
         catch (Exception ex)
@@ -63,7 +144,8 @@ public partial class UpdateWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             LaterButton.IsEnabled = true;
-            InstallButton.IsEnabled = true;
+            VersionCombo.IsEnabled = true;
+            ApplySelectedRelease();
             DownloadProgress.Visibility = Visibility.Collapsed;
         }
     }

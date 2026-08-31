@@ -143,8 +143,7 @@
                                            TextWrapping="Wrap"/>
                                 <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding AutoStartCountdownProgress}"/>
                             </StackPanel>
-                            <Button Content="{Binding TransferPrimaryButtonText}"
-                                    Command="{Binding TransferPrimaryCommand}"
+                            <Button Command="{Binding TransferPrimaryCommand}"
                                     FontWeight="SemiBold" Padding="20,6" Foreground="White" BorderThickness="0" Cursor="Hand"
                                     HorizontalAlignment="Center">
                                 <Button.Style>
@@ -154,17 +153,44 @@
                                             <DataTrigger Binding="{Binding IsAutoStartCountdownActive}" Value="True">
                                                 <Setter Property="Background" Value="#B33A3A"/>
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
+                                                <Setter Property="Background" Value="#B33A3A"/>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
+                                <Grid HorizontalAlignment="Center">
+                                    <TextBlock Text="Run Transfer" FontWeight="SemiBold" Foreground="White" Margin="0"
+                                               HorizontalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsAutoStartCountdownActive}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="Cancel" FontWeight="SemiBold" Foreground="White" Margin="0"
+                                               HorizontalAlignment="Center"
+                                               Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"/>
+                                    <StackPanel HorizontalAlignment="Center"
+                                                Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="Cancel" FontWeight="SemiBold" Foreground="White"
+                                                   TextAlignment="Center" Margin="0"/>
+                                        <TextBlock Text="(keep open)" FontSize="11" Foreground="White"
+                                                   TextAlignment="Center" Margin="0"/>
+                                    </StackPanel>
+                                </Grid>
                             </Button>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
-                                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                                           FontStyle="Italic" Foreground="#666666" Margin="0"/>
-                                <Button Content="Cancel" Command="{Binding CancelAutoCloseCommand}"
-                                        Margin="8,0,0,0" Padding="10,4" Background="#666666"
-                                        Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}"/>
-                            </StackPanel>
+                            <TextBlock Text="{Binding StatusText}" HorizontalAlignment="Center"
+                                       FontStyle="Italic" Foreground="#666666" Margin="0,6,0,0"
+                                       TextAlignment="Center" TextWrapping="Wrap"/>
                         </StackPanel>
                         <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"
                                 VerticalAlignment="Top"/>

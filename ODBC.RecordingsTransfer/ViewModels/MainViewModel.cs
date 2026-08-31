@@ -114,7 +114,9 @@ public class MainViewModel : ViewModelBase
         TransferPrimaryCommand = new RelayCommand(
             _ =>
             {
-                if (IsAutoStartCountdownActive)
+                if (IsAutoCloseCountdownActive)
+                    CancelAutoClose(keepOpen: true);
+                else if (IsAutoStartCountdownActive)
                     CancelAutoStart();
                 else
                     _ = RunTransferAsync();
@@ -124,7 +126,6 @@ public class MainViewModel : ViewModelBase
         BrowseDestinationCommand = new RelayCommand(_ => BrowseFolder(path => DestinationPath = path));
         ClearLogCommand = new RelayCommand(_ => LogText = "");
         OpenLogFolderCommand = new RelayCommand(_ => OpenLogFolder());
-        CancelAutoCloseCommand = new RelayCommand(_ => CancelAutoClose());
         CheckForUpdatesCommand = new RelayCommand(_ => _ = CheckForUpdatesAsync(manual: true), _ => !IsCheckingForUpdates);
         ToggleSettingsPanelCommand = new RelayCommand(_ => ShowSettingsPanel = !ShowSettingsPanel);
     }
@@ -242,7 +243,14 @@ public class MainViewModel : ViewModelBase
     public bool IsAutoCloseCountdownActive
     {
         get => _isAutoCloseCountdownActive;
-        set => SetProperty(ref _isAutoCloseCountdownActive, value);
+        set
+        {
+            if (SetProperty(ref _isAutoCloseCountdownActive, value))
+            {
+                OnPropertyChanged(nameof(TransferPrimaryButtonText));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
     }
 
     public bool ShowSettingsPanel
@@ -285,7 +293,10 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _autoStartCountdownProgress, value);
     }
 
-    public string TransferPrimaryButtonText => IsAutoStartCountdownActive ? "Cancel" : "Run Transfer";
+    public string TransferPrimaryButtonText =>
+        IsAutoCloseCountdownActive ? "Cancel (keep open)"
+        : IsAutoStartCountdownActive ? "Cancel"
+        : "Run Transfer";
 
     public string LogText
     {
@@ -323,7 +334,6 @@ public class MainViewModel : ViewModelBase
     public ICommand BrowseDestinationCommand { get; }
     public ICommand ClearLogCommand { get; }
     public ICommand OpenLogFolderCommand { get; }
-    public ICommand CancelAutoCloseCommand { get; }
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand ToggleSettingsPanelCommand { get; }
 
@@ -476,8 +486,20 @@ public class MainViewModel : ViewModelBase
 
     private void ApplyPlanToQueue(List<TransferActionPlan> plan, bool logToActivity)
     {
-        if (!logToActivity && PlansMatch(plan))
+        var history = TransferItems
+            .Where(i => i.IsHistoryItem)
+            .ToList();
+
+        var active = TransferItems
+            .Where(i => !i.IsHistoryItem)
+            .ToList();
+
+        if (!logToActivity && ActivePlansMatch(active, plan))
             return;
+
+        var planNames = new HashSet<string>(
+            plan.Select(p => p.FileName),
+            StringComparer.OrdinalIgnoreCase);
 
         TransferItems.Clear();
 
@@ -488,18 +510,26 @@ public class MainViewModel : ViewModelBase
                 AppendLog($"Planned: {planItem.Description}");
         }
 
+        foreach (var item in history)
+        {
+            // Keep finished work under new files; drop if the same name is active again.
+            if (planNames.Contains(item.FileName))
+                continue;
+            TransferItems.Add(item);
+        }
+
         if (plan.Count == 0 && logToActivity)
             AppendLog("No file actions planned.");
     }
 
-    private bool PlansMatch(List<TransferActionPlan> plan)
+    private static bool ActivePlansMatch(IReadOnlyList<TransferActionViewModel> active, List<TransferActionPlan> plan)
     {
-        if (TransferItems.Count != plan.Count)
+        if (active.Count != plan.Count)
             return false;
 
         for (var i = 0; i < plan.Count; i++)
         {
-            var existing = TransferItems[i];
+            var existing = active[i];
             var item = plan[i];
             if (!string.Equals(existing.FileName, item.FileName, StringComparison.OrdinalIgnoreCase)
                 || existing.ActionType != item.ActionType
@@ -674,7 +704,8 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            var result = await _updateService.CheckForUpdateAsync(channel);
+            var includeOlderBetas = manual && channel == UpdateChannel.Beta;
+            var result = await _updateService.CheckForUpdateAsync(channel, includeOlderBetas);
 
             if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
             {
@@ -688,6 +719,29 @@ public class MainViewModel : ViewModelBase
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                 }
+                return;
+            }
+
+            if (channel == UpdateChannel.Beta && result.CompatibleReleases.Count > 0)
+            {
+                if (!manual && !result.CompatibleReleases.Any(r => r.IsNewer))
+                    return;
+
+                var preferred = result.Update
+                    ?? result.CompatibleReleases.FirstOrDefault(r => r.IsNewer)
+                    ?? result.CompatibleReleases.FirstOrDefault(r => r.IsCurrent)
+                    ?? result.CompatibleReleases[0];
+
+                StatusText = preferred.IsNewer
+                    ? $"Update available: v{preferred.Version} ({channel})"
+                    : "Select a beta version";
+                AppendLog($"Opened beta version picker ({result.CompatibleReleases.Count} compatible release(s)).");
+
+                var betaWindow = new UpdateWindow(_updateService, result.CompatibleReleases, preferred)
+                {
+                    Owner = System.Windows.Application.Current.MainWindow
+                };
+                betaWindow.ShowDialog();
                 return;
             }
 
@@ -811,6 +865,7 @@ public class MainViewModel : ViewModelBase
                 dispatcher.BeginInvoke(() => HandleTransferUpdate(update, itemLookup));
         });
 
+        var shouldAutoClose = false;
         var context = new TransferContext
         {
             ConfirmRetry = fileName =>
@@ -863,8 +918,7 @@ public class MainViewModel : ViewModelBase
                     AppendLog($"ERROR: {error}");
             }
 
-            if (!_isClosing && AutoCloseSeconds > 0)
-                _ = StartAutoCloseAsync();
+            shouldAutoClose = !_isClosing && AutoCloseSeconds > 0;
         }
         catch (Exception ex)
         {
@@ -875,9 +929,11 @@ public class MainViewModel : ViewModelBase
         finally
         {
             IsRunning = false;
-            if (!_isClosing)
-                _ = RefreshTransferQueueAsync(logToActivity: false);
+            // Leave completed items in the queue (with timestamps); periodic refresh merges new work above them.
         }
+
+        if (shouldAutoClose)
+            _ = StartAutoCloseAsync();
     }
 
     private void HandleTransferUpdate(TransferProgressUpdate update, Dictionary<string, TransferActionViewModel> itemLookup)
@@ -920,21 +976,19 @@ public class MainViewModel : ViewModelBase
                 break;
 
             case TransferProgressUpdateKind.Complete:
-                item.Status = TransferActionStatus.Complete;
-                item.Progress = 1;
-                item.ProgressText = "";
+                item.MarkCompleted(DateTime.Now, update.Message);
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;
 
             case TransferProgressUpdateKind.Skipped:
-                item.Status = TransferActionStatus.Skipped;
+                item.MarkSkipped(DateTime.Now, update.Message);
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;
 
             case TransferProgressUpdateKind.Failed:
-                item.Status = TransferActionStatus.Failed;
+                item.MarkFailed(DateTime.Now, update.Message);
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;
@@ -961,21 +1015,26 @@ public class MainViewModel : ViewModelBase
         }
         catch (TaskCanceledException)
         {
-            StatusText = "Ready";
+            // Status updated in CancelAutoClose(keepOpen: true)
         }
         finally
         {
-            IsAutoCloseCountdownActive = false;
+            if (IsAutoCloseCountdownActive)
+                IsAutoCloseCountdownActive = false;
         }
     }
 
-    private void CancelAutoClose()
+    private void CancelAutoClose(bool keepOpen = false)
     {
         if (_autoCloseCts == null)
             return;
 
         _autoCloseCts.Cancel();
         _autoCloseCts = null;
+        IsAutoCloseCountdownActive = false;
+
+        if (keepOpen && !_isClosing)
+            StatusText = "Ready";
     }
 
     private void ResetCounts()

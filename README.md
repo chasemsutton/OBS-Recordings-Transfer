@@ -34,13 +34,20 @@ GitHub Actions builds the installer and publishes it to [Releases](https://githu
 
 **Update channels:**
 - **Stable** — latest non-prerelease release (`/releases/latest`)
-- **Beta** — latest GitHub prerelease (mark a release as prerelease when publishing betas)
+- **Beta** — choose any compatible GitHub prerelease (upgrade or downgrade). Manual **Check for Updates** opens a version picker; startup only prompts when a newer beta exists.
 
-```bat
-git tag v2.1.0-beta.1
-git push origin v2.1.0-beta.1
+**Beta compatibility:** the app ships with `AppCompatibility.MinCompatibleVersion` (currently `2.2.0`). Only betas at or above that floor are listed, so testing rollbacks cannot select builds that predate a breaking change. When you ship a breaking config/data/behavior change, bump that constant to the new version. You can also hide a bad beta by adding this to its GitHub release notes:
+
+```text
+<!-- compat-min: 2.2.12 -->
 ```
 
+```bat
+git tag v2.2.13
+git push origin v2.2.13
+```
+
+Then mark the GitHub release as a prerelease for the beta channel.
 ## Config
 
 Settings are stored in `config.txt` next to the executable.
