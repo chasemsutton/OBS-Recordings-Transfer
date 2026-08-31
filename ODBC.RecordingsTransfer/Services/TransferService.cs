@@ -23,28 +23,38 @@ public class TransferService
     {
         var plan = new List<TransferActionPlan>();
 
-        if (!Directory.Exists(settings.SourcePath) || !Directory.Exists(settings.DestinationPath))
+        if (string.IsNullOrWhiteSpace(settings.SourcePath) || string.IsNullOrWhiteSpace(settings.DestinationPath))
             return plan;
 
-        var sourceFiles = Directory.GetFiles(settings.SourcePath);
-        var targetFiles = Directory.GetFiles(settings.DestinationPath);
-        var sourceNames = sourceFiles.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase)!;
-        var targetNames = targetFiles.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+        try
+        {
+            if (!Directory.Exists(settings.SourcePath) || !Directory.Exists(settings.DestinationPath))
+                return plan;
 
-        var mp4Files = sourceFiles
-            .Where(f => string.Equals(Path.GetExtension(f), Mp4Extension, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        var mkvFiles = sourceFiles
-            .Where(f => string.Equals(Path.GetExtension(f), MkvExtension, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+            var sourceFiles = Directory.GetFiles(settings.SourcePath);
+            var targetFiles = Directory.GetFiles(settings.DestinationPath);
+            var sourceNames = sourceFiles.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+            var targetNames = targetFiles.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase)!;
 
-        var dataToDelete = CalculateSpaceNeeded(settings, sourceFiles);
+            var mp4Files = sourceFiles
+                .Where(f => string.Equals(Path.GetExtension(f), Mp4Extension, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var mkvFiles = sourceFiles
+                .Where(f => string.Equals(Path.GetExtension(f), MkvExtension, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
-        foreach (var mp4 in mp4Files)
-            AddMp4PlanItem(mp4, settings, targetNames, plan);
+            var dataToDelete = CalculateSpaceNeeded(settings, sourceFiles);
 
-        foreach (var mkv in mkvFiles)
-            AddMkvPlanItem(mkv, settings, sourceNames, targetNames, dataToDelete, plan);
+            foreach (var mp4 in mp4Files)
+                AddMp4PlanItem(mp4, settings, targetNames, plan);
+
+            foreach (var mkv in mkvFiles)
+                AddMkvPlanItem(mkv, settings, sourceNames, targetNames, dataToDelete, plan);
+        }
+        catch
+        {
+            // Blank, missing, inaccessible, or invalid paths should leave the queue empty, not crash.
+        }
 
         return plan;
     }
@@ -152,7 +162,18 @@ public class TransferService
     {
         var fileName = Path.GetFileName(sourceFile)!;
         var mp4Name = Path.GetFileNameWithoutExtension(fileName) + Mp4Extension;
-        var fileAge = DateTime.Now - File.GetCreationTime(sourceFile);
+
+        DateTime created;
+        try
+        {
+            created = File.GetCreationTime(sourceFile);
+        }
+        catch
+        {
+            return;
+        }
+
+        var fileAge = DateTime.Now - created;
 
         var shouldDelete = fileAge.TotalDays > settings.MaxFileAgeDays
             || (dataToDelete > 0 && fileAge.TotalDays > 8);

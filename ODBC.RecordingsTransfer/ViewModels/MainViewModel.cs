@@ -32,13 +32,25 @@ public class MainViewModel : ViewModelBase
         nameof(ShowSettingsPanel)
     };
 
+    private static readonly HashSet<string> QueueRefreshProperties = new(StringComparer.Ordinal)
+    {
+        nameof(SourcePath),
+        nameof(DestinationPath),
+        nameof(MaxFileAgeDays),
+        nameof(MinFreeSpaceGb)
+    };
+
     private readonly ConfigService _configService;
     private readonly LoggingService _loggingService;
     private readonly TransferService _transferService;
     private readonly UpdateService _updateService;
     private CancellationTokenSource? _autoCloseCts;
     private CancellationTokenSource? _autoStartCts;
+    private CancellationTokenSource? _queueRefreshCts;
+    private CancellationTokenSource? _queueRefreshDebounceCts;
     private bool _isClosing;
+    private int _queueRefreshRunning;
+    private const int QueueRefreshIntervalMs = 10000;
 
     private string _sourcePath = "";
     private string _destinationPath = "";
@@ -83,10 +95,14 @@ public class MainViewModel : ViewModelBase
 
         PropertyChanged += (_, e) =>
         {
-            if (_isLoadingSettings || e.PropertyName == null || !AutoSaveProperties.Contains(e.PropertyName))
+            if (_isLoadingSettings || e.PropertyName == null)
                 return;
 
-            ScheduleAutoSave();
+            if (AutoSaveProperties.Contains(e.PropertyName))
+                ScheduleAutoSave();
+
+            if (QueueRefreshProperties.Contains(e.PropertyName))
+                ScheduleQueueRefresh();
         };
 
         LoadSettings();
@@ -303,6 +319,9 @@ public class MainViewModel : ViewModelBase
         if (!FFmpegService.IsAvailable())
             AppendLog("Note: FFmpeg not found. Remux validation will be skipped unless FFmpeg is installed.");
 
+        await RefreshTransferQueueAsync(logToActivity: false);
+        StartQueueRefreshLoop();
+
         if (CheckForUpdatesOnStartup)
             await CheckForUpdatesAsync(manual: false);
 
@@ -310,8 +329,6 @@ public class MainViewModel : ViewModelBase
         {
             if (_isClosing)
                 return;
-
-            BuildTransferQueue(logToActivity: false);
 
             var delay = ParseAutoRunDelay();
             if (delay > 0)
@@ -327,9 +344,114 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private void StartQueueRefreshLoop()
+    {
+        _queueRefreshCts?.Cancel();
+        _queueRefreshCts = new CancellationTokenSource();
+        var token = _queueRefreshCts.Token;
+        _ = RunQueueRefreshLoopAsync(token);
+    }
+
+    private async Task RunQueueRefreshLoopAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(QueueRefreshIntervalMs, token);
+                if (_isClosing || IsRunning)
+                    continue;
+
+                try
+                {
+                    await RefreshTransferQueueAsync(logToActivity: false);
+                }
+                catch
+                {
+                    // Keep polling even if one scan fails (missing path, network share, etc.).
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on close
+        }
+    }
+
+    private void ScheduleQueueRefresh()
+    {
+        _queueRefreshDebounceCts?.Cancel();
+        _queueRefreshDebounceCts = new CancellationTokenSource();
+        var token = _queueRefreshDebounceCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(400, token);
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher == null || token.IsCancellationRequested || _isClosing)
+                    return;
+
+                await dispatcher.InvokeAsync(() => RefreshTransferQueueAsync(logToActivity: false));
+            }
+            catch (OperationCanceledException)
+            {
+                // expected when another change arrives before the delay finishes
+            }
+            catch
+            {
+                // Ignore dispatcher/shutdown races while typing a path.
+            }
+        }, token);
+    }
+
+    private async Task RefreshTransferQueueAsync(bool logToActivity)
+    {
+        if (_isClosing || IsRunning)
+            return;
+
+        if (Interlocked.CompareExchange(ref _queueRefreshRunning, 1, 0) != 0)
+            return;
+
+        try
+        {
+            var settings = ToSettings();
+            List<TransferActionPlan> plan;
+            try
+            {
+                plan = await Task.Run(() => _transferService.BuildPlan(settings));
+            }
+            catch (Exception ex)
+            {
+                if (logToActivity)
+                    AppendLog($"Could not refresh transfer queue: {ex.Message}");
+                return;
+            }
+
+            if (_isClosing || IsRunning)
+                return;
+
+            ApplyPlanToQueue(plan, logToActivity);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _queueRefreshRunning, 0);
+        }
+    }
+
     private List<TransferActionPlan> BuildTransferQueue(bool logToActivity)
     {
         var plan = _transferService.BuildPlan(ToSettings());
+        ApplyPlanToQueue(plan, logToActivity);
+        return plan;
+    }
+
+    private void ApplyPlanToQueue(List<TransferActionPlan> plan, bool logToActivity)
+    {
+        if (!logToActivity && PlansMatch(plan))
+            return;
+
         TransferItems.Clear();
 
         foreach (var planItem in plan)
@@ -341,8 +463,24 @@ public class MainViewModel : ViewModelBase
 
         if (plan.Count == 0 && logToActivity)
             AppendLog("No file actions planned.");
+    }
 
-        return plan;
+    private bool PlansMatch(List<TransferActionPlan> plan)
+    {
+        if (TransferItems.Count != plan.Count)
+            return false;
+
+        for (var i = 0; i < plan.Count; i++)
+        {
+            var existing = TransferItems[i];
+            var item = plan[i];
+            if (!string.Equals(existing.FileName, item.FileName, StringComparison.OrdinalIgnoreCase)
+                || existing.ActionType != item.ActionType
+                || existing.Label != item.Description)
+                return false;
+        }
+
+        return true;
     }
 
     private async Task<bool> StartAutoStartCountdownAsync(int totalSeconds)
@@ -394,6 +532,8 @@ public class MainViewModel : ViewModelBase
         CancelAutoStart();
         CancelAutoClose();
         _autoSaveCts?.Cancel();
+        _queueRefreshCts?.Cancel();
+        _queueRefreshDebounceCts?.Cancel();
     }
 
     private void LoadSettings()
@@ -690,6 +830,8 @@ public class MainViewModel : ViewModelBase
         finally
         {
             IsRunning = false;
+            if (!_isClosing)
+                _ = RefreshTransferQueueAsync(logToActivity: false);
         }
     }
 
