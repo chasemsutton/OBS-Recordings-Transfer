@@ -6,6 +6,7 @@ public class TransferActionViewModel : ViewModelBase
 {
     private TransferActionStatus _status = TransferActionStatus.Pending;
     private double _progress;
+    private string _progressText = "";
 
     public TransferActionViewModel(TransferActionPlan plan)
     {
@@ -28,5 +29,11 @@ public class TransferActionViewModel : ViewModelBase
     {
         get => _progress;
         set => SetProperty(ref _progress, value);
+    }
+
+    public string ProgressText
+    {
+        get => _progressText;
+        set => SetProperty(ref _progressText, value);
     }
 }

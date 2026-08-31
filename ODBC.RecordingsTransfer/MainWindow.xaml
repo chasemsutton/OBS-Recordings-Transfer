@@ -67,9 +67,9 @@
                     </TextBlock>
                     <TextBlock Text="{Binding Label}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
                 </DockPanel>
-                <ProgressBar Height="14" Minimum="0" Maximum="1" Value="{Binding Progress}" Margin="18,4,0,0">
-                    <ProgressBar.Style>
-                        <Style TargetType="ProgressBar">
+                <Grid Margin="18,4,0,0">
+                    <Grid.Style>
+                        <Style TargetType="Grid">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Status}" Value="{x:Static models:TransferActionStatus.InProgress}">
@@ -77,8 +77,15 @@
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </ProgressBar.Style>
-                </ProgressBar>
+                    </Grid.Style>
+                    <ProgressBar Height="14" Minimum="0" Maximum="1" Value="{Binding Progress}"/>
+                    <TextBlock Text="{Binding ProgressText}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               Foreground="#333333"/>
+                </Grid>
             </StackPanel>
         </DataTemplate>
     </Window.Resources>

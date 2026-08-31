@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
@@ -57,6 +58,7 @@ public class MainViewModel : ViewModelBase
     private int _deletedCount;
     private int _leftCount;
     private bool _isLoadingSettings;
+    private CancellationTokenSource? _autoSaveCts;
 
     public MainViewModel()
     {
@@ -76,7 +78,7 @@ public class MainViewModel : ViewModelBase
             if (_isLoadingSettings || e.PropertyName == null || !AutoSaveProperties.Contains(e.PropertyName))
                 return;
 
-            AutoSaveSettings();
+            ScheduleAutoSave();
         };
 
         LoadSettings();
@@ -277,6 +279,29 @@ public class MainViewModel : ViewModelBase
     {
         get => _skipDestinationYearWarning;
         set => SetProperty(ref _skipDestinationYearWarning, value);
+    }
+
+    private void ScheduleAutoSave()
+    {
+        _autoSaveCts?.Cancel();
+        _autoSaveCts = new CancellationTokenSource();
+        var token = _autoSaveCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(400, token);
+                if (token.IsCancellationRequested)
+                    return;
+
+                System.Windows.Application.Current.Dispatcher.Invoke(AutoSaveSettings);
+            }
+            catch (TaskCanceledException)
+            {
+                // expected when another change arrives before the delay finishes
+            }
+        }, token);
     }
 
     private void AutoSaveSettings()
@@ -544,6 +569,8 @@ public class MainViewModel : ViewModelBase
             case TransferProgressUpdateKind.Start:
                 item.Status = TransferActionStatus.InProgress;
                 item.Progress = 0;
+                if (update.TotalBytes > 0)
+                    item.ProgressText = FileSizeFormatter.FormatProgress(0, update.TotalBytes);
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;
@@ -551,11 +578,14 @@ public class MainViewModel : ViewModelBase
             case TransferProgressUpdateKind.Progress:
                 item.Status = TransferActionStatus.InProgress;
                 item.Progress = update.Progress;
+                if (update.TotalBytes > 0)
+                    item.ProgressText = FileSizeFormatter.FormatProgress(update.BytesTransferred, update.TotalBytes);
                 break;
 
             case TransferProgressUpdateKind.Complete:
                 item.Status = TransferActionStatus.Complete;
                 item.Progress = 1;
+                item.ProgressText = "";
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;

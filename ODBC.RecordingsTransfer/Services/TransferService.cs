@@ -59,7 +59,7 @@ public class TransferService
         void Report(TransferProgressUpdate update)
         {
             progress?.Report(update);
-            if (!string.IsNullOrWhiteSpace(update.Message))
+            if (update.Kind == TransferProgressUpdateKind.Log && !string.IsNullOrWhiteSpace(update.Message))
                 _logger.Write(update.Message);
         }
 
@@ -212,13 +212,16 @@ public class TransferService
             return;
         }
 
+        var fileSize = new FileInfo(sourceFile).Length;
+
         report(new TransferProgressUpdate
         {
             Kind = TransferProgressUpdateKind.Start,
             FileName = fileName,
             ActionType = TransferActionType.Move,
             Progress = 0,
-            Message = $"Starting: {fileName}"
+            TotalBytes = fileSize,
+            Message = $"Copying: {fileName}"
         });
 
         if (settings.VerifyRemux && !IsRemuxComplete(sourceFile, message => report(new TransferProgressUpdate
@@ -249,13 +252,14 @@ public class TransferService
                 if (File.Exists(destFile))
                     File.Delete(destFile);
 
-                CopyFileWithProgress(sourceFile, destFile, value => report(new TransferProgressUpdate
+                CopyFileWithProgress(sourceFile, destFile, (copied, total) => report(new TransferProgressUpdate
                 {
                     Kind = TransferProgressUpdateKind.Progress,
                     FileName = fileName,
                     ActionType = TransferActionType.Move,
-                    Progress = value,
-                    Message = $"Copying: {fileName}"
+                    Progress = total > 0 ? copied / (double)total : 1,
+                    BytesTransferred = copied,
+                    TotalBytes = total
                 }));
 
                 if (settings.VerifyTransfer)
@@ -411,7 +415,7 @@ public class TransferService
         }
     }
 
-    private static void CopyFileWithProgress(string source, string destination, Action<double> reportProgress)
+    private static void CopyFileWithProgress(string source, string destination, Action<long, long> reportBytes)
     {
         var length = new FileInfo(source).Length;
         long copied = 0;
@@ -420,12 +424,14 @@ public class TransferService
         using var output = File.Create(destination);
         var buffer = new byte[CopyBufferSize];
 
+        reportBytes(0, length);
+
         int read;
         while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
         {
             output.Write(buffer, 0, read);
             copied += read;
-            reportProgress(length > 0 ? copied / (double)length : 1);
+            reportBytes(copied, length);
         }
     }
 

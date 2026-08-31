@@ -29,6 +29,8 @@ public class TransferProgressUpdate
     public string FileName { get; init; } = "";
     public TransferActionType ActionType { get; init; }
     public double Progress { get; init; }
+    public long BytesTransferred { get; init; }
+    public long TotalBytes { get; init; }
     public string? Message { get; init; }
 }
 
