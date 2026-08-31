@@ -36,18 +36,29 @@ GitHub Actions builds the installer and publishes it to [Releases](https://githu
 - **Stable** — latest non-prerelease release (`/releases/latest`)
 - **Beta** — choose any compatible GitHub prerelease (upgrade or downgrade). Manual **Check for Updates** opens a version picker; startup only prompts when a newer beta exists.
 
-**Beta compatibility:** the app ships with `AppCompatibility.MinCompatibleVersion` (currently `2.2.0`). Only betas at or above that floor are listed, so testing rollbacks cannot select builds that predate a breaking change. When you ship a breaking config/data/behavior change, bump that constant to the new version. You can also hide a bad beta by adding this to its GitHub release notes:
+**Release markers** (optional HTML comments in the GitHub release body):
 
 ```text
-<!-- compat-min: 2.2.12 -->
+<!-- update-from: 2.2.13 -->
+<!-- compat-min: 2.2.0 -->
 ```
 
+- **`update-from`** — minimum installed version that may use the in-app updater to reach this release. Older installs are told to uninstall and reinstall from GitHub Releases instead.
+- **`compat-min`** — floor for the beta version picker (hide older/broken betas when testing rollbacks). The app also ships `AppCompatibility.MinCompatibleVersion` (currently `2.2.0`); the effective floor is the higher of the two.
+
+When you ship a breaking installer/update-path change, put `update-from: <this version>` on that release (and later ones as needed). When you ship a breaking config/data change that blocks safe downgrade, bump `AppCompatibility.MinCompatibleVersion`.
+
 ```bat
-git tag v2.2.13
-git push origin v2.2.13
+git tag v2.3.0
+git push origin v2.3.0
 ```
 
 Then mark the GitHub release as a prerelease for the beta channel.
+
+**Transfer modes** (radios above Run Transfer):
+- **None** — manual transfers only
+- **Auto-start** — run once after launch (delay is in Settings)
+- **Continuous** — keep transferring ready MP4s; the primary button becomes **Stop Transferring** (cancels in-progress work and returns to None)
 ## Config
 
 Settings are stored in `config.txt` next to the executable.

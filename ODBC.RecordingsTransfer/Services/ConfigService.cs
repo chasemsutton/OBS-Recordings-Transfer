@@ -35,7 +35,7 @@ public class ConfigService
         settings.VerifyTransfer = bool.Parse(ReadValue(lines, "Verify Transfer", settings.VerifyTransfer.ToString()));
         settings.VerifyRemux = bool.Parse(ReadValue(lines, "Verify Remux", settings.VerifyRemux.ToString()));
         settings.CheckRemuxComplete = bool.Parse(ReadValue(lines, "Check Remux Complete", settings.CheckRemuxComplete.ToString()));
-        settings.AutoRunOnStartup = bool.Parse(ReadValue(lines, "Begin Transfer On Startup", settings.AutoRunOnStartup.ToString()));
+        settings.TransferMode = ParseTransferMode(lines, settings.TransferMode);
         settings.AutoRunDelaySeconds = ParseDelay(ReadValue(lines, "Auto Start Delay (seconds)", settings.AutoRunDelaySeconds.ToString()));
         settings.CheckForUpdatesOnStartup = bool.Parse(ReadValue(lines, "Check For Updates On Startup", settings.CheckForUpdatesOnStartup.ToString()));
         settings.UpdateChannel = Enum.TryParse<UpdateChannel>(
@@ -63,7 +63,8 @@ public class ConfigService
             $"Verify Transfer: \"{settings.VerifyTransfer}\"",
             $"Verify Remux: \"{settings.VerifyRemux}\"",
             $"Check Remux Complete: \"{settings.CheckRemuxComplete}\"",
-            $"Begin Transfer On Startup: \"{settings.AutoRunOnStartup}\"",
+            $"Transfer Mode: \"{settings.TransferMode}\"",
+            $"Begin Transfer On Startup: \"{settings.TransferMode == TransferMode.AutoStart}\"",
             $"Auto Start Delay (seconds): \"{settings.AutoRunDelaySeconds}\"",
             $"Check For Updates On Startup: \"{settings.CheckForUpdatesOnStartup}\"",
             $"Update Channel: \"{settings.UpdateChannel}\"",
@@ -75,6 +76,20 @@ public class ConfigService
     }
 
     public string ConfigFilePath => _configPath;
+
+    private static TransferMode ParseTransferMode(List<string> lines, TransferMode defaultValue)
+    {
+        var raw = ReadValue(lines, "Transfer Mode", "");
+        if (!string.IsNullOrWhiteSpace(raw)
+            && Enum.TryParse<TransferMode>(raw, true, out var mode))
+            return mode;
+
+        // Legacy key from pre-2.3 builds.
+        if (bool.TryParse(ReadValue(lines, "Begin Transfer On Startup", "False"), out var autoStart) && autoStart)
+            return TransferMode.AutoStart;
+
+        return defaultValue;
+    }
 
     private static int ParseDelay(string value)
     {

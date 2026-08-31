@@ -15,6 +15,9 @@ public class UpdateService
     private static readonly Regex CompatMinRegex = new(
         @"<!--\s*compat-min:\s*([0-9]+(?:\.[0-9]+){1,3})\s*-->",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex UpdateFromRegex = new(
+        @"<!--\s*update-from:\s*([0-9]+(?:\.[0-9]+){1,3})\s*-->",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public Version CurrentVersion { get; } = GetCurrentVersion();
 
@@ -94,16 +97,8 @@ public class UpdateService
         }
 
         var notes = GetReleaseNotes(release.Value.Root);
-        return UpdateCheckResult.Found(new UpdateInfo
-        {
-            Version = version,
-            TagName = tagName,
-            ReleaseNotes = notes,
-            DownloadUrl = downloadUrl,
-            FileName = fileName,
-            Channel = UpdateChannel.Stable,
-            IsNewer = true
-        });
+        return UpdateCheckResult.Found(CreateUpdateInfo(
+            version, tagName, notes, downloadUrl, fileName, UpdateChannel.Stable, CurrentVersion));
     }
 
     private async Task<UpdateCheckResult> CheckBetaAsync(bool includeOlderBetas, CancellationToken cancellationToken)
@@ -168,24 +163,43 @@ public class UpdateService
             if (!TryGetInstallerAsset(release, out var downloadUrl, out var fileName))
                 continue;
 
-            var cmp = version.CompareTo(CurrentVersion);
-            results.Add(new UpdateInfo
-            {
-                Version = version,
-                TagName = tagName,
-                ReleaseNotes = notes,
-                DownloadUrl = downloadUrl,
-                FileName = fileName,
-                Channel = UpdateChannel.Beta,
-                IsCurrent = cmp == 0,
-                IsNewer = cmp > 0,
-                IsOlder = cmp < 0
-            });
+            results.Add(CreateUpdateInfo(
+                version, tagName, notes, downloadUrl, fileName, UpdateChannel.Beta, CurrentVersion));
         }
 
         return results
             .OrderByDescending(r => r.Version)
             .ToList();
+    }
+
+    public void OpenReleasesPage()
+    {
+        Process.Start(new ProcessStartInfo(UpdateConfig.ReleasesUrl) { UseShellExecute = true });
+    }
+
+    private static UpdateInfo CreateUpdateInfo(
+        Version version,
+        string tagName,
+        string notes,
+        string downloadUrl,
+        string fileName,
+        UpdateChannel channel,
+        Version currentVersion)
+    {
+        var cmp = version.CompareTo(currentVersion);
+        return new UpdateInfo
+        {
+            Version = version,
+            TagName = tagName,
+            ReleaseNotes = notes,
+            DownloadUrl = downloadUrl,
+            FileName = fileName,
+            Channel = channel,
+            IsCurrent = cmp == 0,
+            IsNewer = cmp > 0,
+            IsOlder = cmp < 0,
+            MinUpdateFrom = ParseUpdateFrom(notes)
+        };
     }
 
     private static async Task<(JsonElement Root, string TagName)?> GetLatestStableReleaseAsync(CancellationToken cancellationToken)
@@ -246,6 +260,15 @@ public class UpdateService
     private static Version? ParseCompatMin(string releaseNotes)
     {
         var match = CompatMinRegex.Match(releaseNotes);
+        if (!match.Success)
+            return null;
+
+        return Version.TryParse(match.Groups[1].Value, out var version) ? version : null;
+    }
+
+    private static Version? ParseUpdateFrom(string releaseNotes)
+    {
+        var match = UpdateFromRegex.Match(releaseNotes);
         if (!match.Success)
             return null;
 

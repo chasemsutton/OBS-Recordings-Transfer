@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using ODBC.RecordingsTransfer.Models;
@@ -59,29 +60,47 @@ public partial class UpdateWindow : Window
     {
         ReleaseNotesText.Text = string.IsNullOrWhiteSpace(_selected.ReleaseNotes)
             ? "No release notes provided."
-            : StripCompatMarker(_selected.ReleaseNotes);
+            : StripReleaseMarkers(_selected.ReleaseNotes);
 
         if (_selected.IsCurrent)
         {
             InstallButton.IsEnabled = false;
             InstallButton.Content = "Already installed";
             StatusText.Text = "This is the version you are running.";
+            StatusText.Foreground = System.Windows.Media.Brushes.Gray;
+            return;
         }
-        else
+
+        if (_selected.RequiresManualReinstall(_updateService.CurrentVersion))
         {
             InstallButton.IsEnabled = true;
-            InstallButton.Content = _selected.IsOlder ? "Download and Downgrade" : "Download and Install";
-            StatusText.Text = "";
+            InstallButton.Content = "Open GitHub Releases";
+            StatusText.Text =
+                $"This version requires at least v{_selected.MinUpdateFrom} for in-app update. " +
+                $"You are on v{_updateService.CurrentVersion}. Uninstall the current app, then download and install v{_selected.Version} from GitHub.";
+            StatusText.Foreground = System.Windows.Media.Brushes.DarkOrange;
+            return;
         }
+
+        InstallButton.IsEnabled = true;
+        InstallButton.Content = _selected.IsOlder ? "Download and Downgrade" : "Download and Install";
+        StatusText.Text = "";
+        StatusText.Foreground = System.Windows.Media.Brushes.Gray;
     }
 
-    private static string StripCompatMarker(string notes)
+    private static string StripReleaseMarkers(string notes)
     {
-        return System.Text.RegularExpressions.Regex.Replace(
+        notes = System.Text.RegularExpressions.Regex.Replace(
             notes,
             @"<!--\s*compat-min:\s*[0-9]+(?:\.[0-9]+){1,3}\s*-->",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        notes = System.Text.RegularExpressions.Regex.Replace(
+            notes,
+            @"<!--\s*update-from:\s*[0-9]+(?:\.[0-9]+){1,3}\s*-->",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return notes.Trim();
     }
 
     private void LaterButton_Click(object sender, RoutedEventArgs e)
@@ -94,6 +113,12 @@ public partial class UpdateWindow : Window
     {
         if (_selected.IsCurrent)
             return;
+
+        if (_selected.RequiresManualReinstall(_updateService.CurrentVersion))
+        {
+            _updateService.OpenReleasesPage();
+            return;
+        }
 
         if (_selected.IsOlder)
         {
@@ -113,6 +138,7 @@ public partial class UpdateWindow : Window
         InstallButton.IsEnabled = false;
         VersionCombo.IsEnabled = false;
         DownloadProgress.Visibility = Visibility.Visible;
+        StatusText.Foreground = System.Windows.Media.Brushes.Gray;
         StatusText.Text = _selected.IsOlder ? "Downloading older build..." : "Downloading update...";
 
         _cts = new CancellationTokenSource();

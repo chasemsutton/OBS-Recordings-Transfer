@@ -25,7 +25,7 @@ public class MainViewModel : ViewModelBase
         nameof(VerifyTransfer),
         nameof(VerifyRemux),
         nameof(CheckRemuxComplete),
-        nameof(AutoRunOnStartup),
+        nameof(TransferMode),
         nameof(AutoRunDelayText),
         nameof(CheckForUpdatesOnStartup),
         nameof(UpdateChannelName),
@@ -48,11 +48,14 @@ public class MainViewModel : ViewModelBase
     private readonly UpdateService _updateService;
     private CancellationTokenSource? _autoCloseCts;
     private CancellationTokenSource? _autoStartCts;
+    private CancellationTokenSource? _transferCts;
+    private CancellationTokenSource? _continuousCts;
     private CancellationTokenSource? _queueRefreshCts;
     private CancellationTokenSource? _queueRefreshDebounceCts;
     private bool _isClosing;
     private int _queueRefreshRunning;
     private const int QueueRefreshIntervalMs = 3000;
+    private const int ContinuousPollIntervalMs = 3000;
 
     private string _sourcePath = "";
     private string _destinationPath = "";
@@ -62,7 +65,7 @@ public class MainViewModel : ViewModelBase
     private bool _verifyTransfer;
     private bool _verifyRemux;
     private bool _checkRemuxComplete = true;
-    private bool _autoRunOnStartup;
+    private TransferMode _transferMode = TransferMode.None;
     private string _autoRunDelayText = "5";
     private bool _checkForUpdatesOnStartup = true;
     private string _updateChannelName = "Stable";
@@ -110,7 +113,7 @@ public class MainViewModel : ViewModelBase
 
         LoadSettings();
 
-        RunTransferCommand = new RelayCommand(_ => _ = RunTransferAsync(), _ => !IsRunning && !IsAutoStartCountdownActive);
+        RunTransferCommand = new RelayCommand(_ => _ = RunTransferAsync(), _ => !IsRunning && !IsAutoStartCountdownActive && TransferMode != TransferMode.Continuous);
         TransferPrimaryCommand = new RelayCommand(
             _ =>
             {
@@ -118,10 +121,12 @@ public class MainViewModel : ViewModelBase
                     CancelAutoClose(keepOpen: true);
                 else if (IsAutoStartCountdownActive)
                     CancelAutoStart();
+                else if (TransferMode == TransferMode.Continuous)
+                    StopContinuousMode();
                 else
                     _ = RunTransferAsync();
             },
-            _ => !IsRunning);
+            _ => TransferMode == TransferMode.Continuous || !IsRunning);
         BrowseSourceCommand = new RelayCommand(_ => BrowseFolder(path => SourcePath = path));
         BrowseDestinationCommand = new RelayCommand(_ => BrowseFolder(path => DestinationPath = path));
         ClearLogCommand = new RelayCommand(_ => LogText = "");
@@ -190,11 +195,60 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    public bool AutoRunOnStartup
+    public TransferMode TransferMode
     {
-        get => _autoRunOnStartup;
-        set => SetProperty(ref _autoRunOnStartup, value);
+        get => _transferMode;
+        set
+        {
+            var previous = _transferMode;
+            if (!SetProperty(ref _transferMode, value))
+                return;
+
+            OnPropertyChanged(nameof(IsTransferModeNone));
+            OnPropertyChanged(nameof(IsTransferModeAutoStart));
+            OnPropertyChanged(nameof(IsTransferModeContinuous));
+            OnPropertyChanged(nameof(IsContinuousMode));
+            CommandManager.InvalidateRequerySuggested();
+
+            if (_isLoadingSettings)
+                return;
+
+            if (value == TransferMode.Continuous)
+            {
+                StartContinuousMode();
+            }
+            else
+            {
+                StopContinuousLoopOnly();
+                if (previous == TransferMode.Continuous)
+                {
+                    _transferCts?.Cancel();
+                    if (!IsRunning && !_isClosing)
+                        StatusText = "Ready";
+                }
+            }
+        }
     }
+
+    public bool IsTransferModeNone
+    {
+        get => TransferMode == TransferMode.None;
+        set { if (value) TransferMode = TransferMode.None; }
+    }
+
+    public bool IsTransferModeAutoStart
+    {
+        get => TransferMode == TransferMode.AutoStart;
+        set { if (value) TransferMode = TransferMode.AutoStart; }
+    }
+
+    public bool IsTransferModeContinuous
+    {
+        get => TransferMode == TransferMode.Continuous;
+        set { if (value) TransferMode = TransferMode.Continuous; }
+    }
+
+    public bool IsContinuousMode => TransferMode == TransferMode.Continuous;
 
     public string AutoRunDelayText
     {
@@ -348,7 +402,13 @@ public class MainViewModel : ViewModelBase
         if (CheckForUpdatesOnStartup)
             await CheckForUpdatesAsync(manual: false);
 
-        if (AutoRunOnStartup)
+        if (TransferMode == TransferMode.Continuous)
+        {
+            StartContinuousMode();
+            return;
+        }
+
+        if (TransferMode == TransferMode.AutoStart)
         {
             if (_isClosing)
                 return;
@@ -588,6 +648,8 @@ public class MainViewModel : ViewModelBase
         _isClosing = true;
         CancelAutoStart();
         CancelAutoClose();
+        StopContinuousLoopOnly();
+        _transferCts?.Cancel();
         _autoSaveCts?.Cancel();
         _queueRefreshCts?.Cancel();
         _queueRefreshDebounceCts?.Cancel();
@@ -607,7 +669,7 @@ public class MainViewModel : ViewModelBase
             VerifyTransfer = settings.VerifyTransfer;
             VerifyRemux = settings.VerifyRemux;
             CheckRemuxComplete = settings.CheckRemuxComplete;
-            AutoRunOnStartup = settings.AutoRunOnStartup;
+            TransferMode = settings.TransferMode;
             AutoRunDelayText = settings.AutoRunDelaySeconds.ToString();
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
             UpdateChannelName = settings.UpdateChannel.ToString();
@@ -672,7 +734,7 @@ public class MainViewModel : ViewModelBase
         VerifyTransfer = VerifyTransfer,
         VerifyRemux = VerifyRemux,
         CheckRemuxComplete = CheckRemuxComplete,
-        AutoRunOnStartup = AutoRunOnStartup,
+        TransferMode = TransferMode,
         AutoRunDelaySeconds = ParseAutoRunDelay(),
         CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
         UpdateChannel = ParseUpdateChannel(),
@@ -826,15 +888,20 @@ public class MainViewModel : ViewModelBase
         return dialog.Result != DestinationConfirmResult.Cancel;
     }
 
-    private async Task RunTransferAsync()
+    private async Task RunTransferAsync(bool fromContinuousLoop = false)
     {
         if (_isClosing)
+            return;
+
+        if (IsRunning)
             return;
 
         if (!ConfirmDestinationPath())
         {
             StatusText = "Transfer cancelled";
             AppendLog("Transfer cancelled by user (destination year warning).");
+            if (fromContinuousLoop)
+                StopContinuousMode();
             return;
         }
 
@@ -842,16 +909,23 @@ public class MainViewModel : ViewModelBase
             return;
 
         CancelAutoClose();
-        CancelAutoStart();
+        if (!fromContinuousLoop)
+            CancelAutoStart();
+
+        _transferCts?.Cancel();
+        _transferCts = new CancellationTokenSource();
+        var transferToken = _transferCts.Token;
+
         IsRunning = true;
-        StatusText = "Running transfer...";
-        ResetCounts();
+        StatusText = fromContinuousLoop ? "Continuous transfer..." : "Running transfer...";
+        if (!fromContinuousLoop)
+            ResetCounts();
 
         var settings = ToSettings();
         _configService.Save(settings);
 
-        AppendLog("Refreshing transfer plan before run...");
-        BuildTransferQueue(logToActivity: true);
+        AppendLog(fromContinuousLoop ? "Continuous mode: checking for ready files..." : "Refreshing transfer plan before run...");
+        BuildTransferQueue(logToActivity: !fromContinuousLoop);
         var itemLookup = new Dictionary<string, TransferActionViewModel>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in TransferItems)
             itemLookup[item.FileName] = item;
@@ -868,8 +942,12 @@ public class MainViewModel : ViewModelBase
         var shouldAutoClose = false;
         var context = new TransferContext
         {
+            CancellationToken = transferToken,
             ConfirmRetry = fileName =>
             {
+                if (transferToken.IsCancellationRequested || fromContinuousLoop)
+                    return false;
+
                 var result = MessageBoxResult.No;
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -886,30 +964,42 @@ public class MainViewModel : ViewModelBase
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
                     AppendLog($"Remux incomplete — will not move: {fileName}");
-                    System.Windows.MessageBox.Show(
-                        $"\"{fileName}\" looks finished growing but is missing a remux index (moov).\n\nThis file will not be moved.",
-                        "Remux Incomplete",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                    if (!fromContinuousLoop)
+                    {
+                        System.Windows.MessageBox.Show(
+                            $"\"{fileName}\" looks finished growing but is missing a remux index (moov).\n\nThis file will not be moved.",
+                            "Remux Incomplete",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
                 });
             }
         };
 
         try
         {
-            var result = await Task.Run(() => _transferService.Run(settings, context, progress));
+            var result = await Task.Run(() => _transferService.Run(settings, context, progress), transferToken);
 
             DetectedCount = result.Detected.Count;
             MovedCount = result.Moved.Count;
             DeletedCount = result.Deleted.Count;
             LeftCount = result.Left.Count;
 
-            _loggingService.WriteResult(result);
+            if (!transferToken.IsCancellationRequested)
+                _loggingService.WriteResult(result);
 
-            if (result.Success)
+            if (transferToken.IsCancellationRequested)
             {
-                StatusText = $"Complete — {result.Moved.Count} moved, {result.Deleted.Count} deleted";
-                AppendLog("Transfer complete.");
+                StatusText = "Transfer stopped";
+                AppendLog("Transfer stopped.");
+            }
+            else if (result.Success)
+            {
+                StatusText = fromContinuousLoop
+                    ? $"Watching for files — last run: {result.Moved.Count} moved"
+                    : $"Complete — {result.Moved.Count} moved, {result.Deleted.Count} deleted";
+                if (!fromContinuousLoop || result.Moved.Count > 0 || result.Deleted.Count > 0)
+                    AppendLog(fromContinuousLoop ? "Continuous transfer pass complete." : "Transfer complete.");
             }
             else
             {
@@ -918,7 +1008,12 @@ public class MainViewModel : ViewModelBase
                     AppendLog($"ERROR: {error}");
             }
 
-            shouldAutoClose = !_isClosing && AutoCloseSeconds > 0;
+            shouldAutoClose = !fromContinuousLoop && !_isClosing && AutoCloseSeconds > 0 && !transferToken.IsCancellationRequested;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Transfer stopped";
+            AppendLog("Transfer stopped.");
         }
         catch (Exception ex)
         {
@@ -929,11 +1024,95 @@ public class MainViewModel : ViewModelBase
         finally
         {
             IsRunning = false;
-            // Leave completed items in the queue (with timestamps); periodic refresh merges new work above them.
         }
 
         if (shouldAutoClose)
             _ = StartAutoCloseAsync();
+    }
+
+    private void StartContinuousMode()
+    {
+        StopContinuousLoopOnly();
+        CancelAutoClose();
+        CancelAutoStart();
+
+        _continuousCts = new CancellationTokenSource();
+        var token = _continuousCts.Token;
+        StatusText = "Continuous transfer mode";
+        AppendLog("Continuous auto-transfer mode started.");
+        _ = RunContinuousLoopAsync(token);
+    }
+
+    private void StopContinuousMode()
+    {
+        AppendLog("Continuous auto-transfer mode stopped.");
+        StopContinuousLoopOnly();
+        _transferCts?.Cancel();
+
+        if (TransferMode != TransferMode.None)
+        {
+            _isLoadingSettings = true;
+            try
+            {
+                // Avoid re-entering StartContinuousMode via the setter.
+                _transferMode = TransferMode.None;
+                OnPropertyChanged(nameof(TransferMode));
+                OnPropertyChanged(nameof(IsTransferModeNone));
+                OnPropertyChanged(nameof(IsTransferModeAutoStart));
+                OnPropertyChanged(nameof(IsTransferModeContinuous));
+                OnPropertyChanged(nameof(IsContinuousMode));
+            }
+            finally
+            {
+                _isLoadingSettings = false;
+            }
+
+            ScheduleAutoSave();
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        if (!_isClosing && !IsRunning)
+            StatusText = "Ready";
+    }
+
+    private void StopContinuousLoopOnly()
+    {
+        _continuousCts?.Cancel();
+        _continuousCts = null;
+    }
+
+    private async Task RunContinuousLoopAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested && !_isClosing)
+            {
+                if (!IsRunning)
+                {
+                    await RefreshTransferQueueAsync(logToActivity: false);
+                    if (token.IsCancellationRequested)
+                        break;
+
+                    if (HasActionableTransferWork())
+                        await RunTransferAsync(fromContinuousLoop: true);
+                    else if (!_isClosing)
+                        StatusText = "Continuous mode — waiting for ready files...";
+                }
+
+                await Task.Delay(ContinuousPollIntervalMs, token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected when stopping continuous mode
+        }
+    }
+
+    private bool HasActionableTransferWork()
+    {
+        return TransferItems.Any(i =>
+            !i.IsHistoryItem
+            && i.ActionType is TransferActionType.Move or TransferActionType.WaitingRemux or TransferActionType.Delete);
     }
 
     private void HandleTransferUpdate(TransferProgressUpdate update, Dictionary<string, TransferActionViewModel> itemLookup)

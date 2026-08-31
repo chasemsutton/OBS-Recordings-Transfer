@@ -126,6 +126,7 @@ public class TransferService
         IProgress<TransferProgressUpdate>? progress = null)
     {
         var result = new TransferResult();
+        var token = context?.CancellationToken ?? CancellationToken.None;
 
         void Report(TransferProgressUpdate update)
         {
@@ -140,8 +141,16 @@ public class TransferService
             Message = message
         });
 
+        void ThrowIfCanceled()
+        {
+            if (token.IsCancellationRequested)
+                throw new OperationCanceledException(token);
+        }
+
         try
         {
+            ThrowIfCanceled();
+
             if (!Directory.Exists(settings.SourcePath) || !Directory.Exists(settings.DestinationPath))
             {
                 var error = "Source or destination path does not exist.";
@@ -174,6 +183,7 @@ public class TransferService
 
             foreach (var mp4 in mp4Files)
             {
+                ThrowIfCanceled();
                 var fileName = Path.GetFileName(mp4)!;
                 if (targetNames.Contains(fileName))
                 {
@@ -208,10 +218,14 @@ public class TransferService
             }
 
             foreach (var mp4 in readyMp4s)
+            {
+                ThrowIfCanceled();
                 ProcessMp4(mp4, settings, targetNames, result, context, Report);
+            }
 
             foreach (var mp4 in waitingMp4s)
             {
+                ThrowIfCanceled();
                 var fileName = Path.GetFileName(mp4)!;
                 if (!WaitForRemuxReady(mp4, settings, context, Report))
                 {
@@ -219,14 +233,24 @@ public class TransferService
                     continue;
                 }
 
+                ThrowIfCanceled();
                 ProcessMp4(mp4, settings, targetNames, result, context, Report);
             }
 
             foreach (var mkv in mkvFiles)
+            {
+                ThrowIfCanceled();
                 ProcessMkv(mkv, settings, sourceNames, targetNames, dataToDelete, result, Report);
+            }
 
             result.Success = result.Errors.Count == 0;
             _remuxTracker.InvalidateCache();
+        }
+        catch (OperationCanceledException)
+        {
+            Log("Transfer cancelled.");
+            result.Success = false;
+            result.Errors.Add("Transfer cancelled.");
         }
         catch (Exception ex)
         {
@@ -256,6 +280,8 @@ public class TransferService
 
         while (true)
         {
+            context?.CancellationToken.ThrowIfCancellationRequested();
+
             if (!File.Exists(sourceFile))
             {
                 report(new TransferProgressUpdate
@@ -302,7 +328,10 @@ public class TransferService
                 Message = "Waiting for remux..."
             });
 
-            Thread.Sleep(RemuxPollInterval);
+            if (context?.CancellationToken.WaitHandle.WaitOne(RemuxPollInterval) == true)
+                context.CancellationToken.ThrowIfCancellationRequested();
+            else if (context == null)
+                Thread.Sleep(RemuxPollInterval);
         }
     }
 
@@ -512,7 +541,7 @@ public class TransferService
                     Progress = total > 0 ? copied / (double)total : 1,
                     BytesTransferred = copied,
                     TotalBytes = total
-                }));
+                }), context?.CancellationToken ?? CancellationToken.None);
 
                 if (settings.VerifyTransfer)
                 {
@@ -683,7 +712,11 @@ public class TransferService
         }
     }
 
-    private static void CopyFileWithProgress(string source, string destination, Action<long, long> reportBytes)
+    private static void CopyFileWithProgress(
+        string source,
+        string destination,
+        Action<long, long> reportBytes,
+        CancellationToken cancellationToken)
     {
         var length = new FileInfo(source).Length;
         long copied = 0;
@@ -707,6 +740,7 @@ public class TransferService
         int read;
         while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             output.Write(buffer, 0, read);
             copied += read;
             Report(false);

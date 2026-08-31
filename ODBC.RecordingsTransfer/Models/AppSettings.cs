@@ -11,7 +11,7 @@ public class AppSettings
     public bool VerifyRemux { get; set; } = false;
     /// <summary>When true, wait for OBS-style remux (stable size + moov) before moving MP4s.</summary>
     public bool CheckRemuxComplete { get; set; } = true;
-    public bool AutoRunOnStartup { get; set; } = false;
+    public TransferMode TransferMode { get; set; } = TransferMode.None;
     public int AutoRunDelaySeconds { get; set; } = 5;
     public bool CheckForUpdatesOnStartup { get; set; } = true;
     public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Stable;

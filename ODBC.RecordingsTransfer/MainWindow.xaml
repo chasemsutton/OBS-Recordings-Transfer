@@ -135,7 +135,22 @@
                 <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="8,12" Margin="0,0,0,12"
                         BorderBrush="#E0E0E0" BorderThickness="1" MinWidth="0"
                         HorizontalAlignment="Stretch">
-                    <WrapPanel HorizontalAlignment="Center">
+                    <StackPanel HorizontalAlignment="Center">
+                        <UniformGrid Columns="3" Margin="0,0,0,10" HorizontalAlignment="Center">
+                            <RadioButton Content="None" GroupName="TransferMode"
+                                         IsChecked="{Binding IsTransferModeNone}" Margin="6,0"
+                                         VerticalContentAlignment="Center"/>
+                            <RadioButton Content="Auto-start" GroupName="TransferMode"
+                                         IsChecked="{Binding IsTransferModeAutoStart}" Margin="6,0"
+                                         VerticalContentAlignment="Center"
+                                         ToolTip="Run a transfer automatically after the startup delay in Settings."/>
+                            <RadioButton Content="Continuous" GroupName="TransferMode"
+                                         IsChecked="{Binding IsTransferModeContinuous}" Margin="6,0"
+                                         VerticalContentAlignment="Center"
+                                         ToolTip="Keep transferring MP4 files as they become remux-ready."/>
+                        </UniformGrid>
+
+                        <WrapPanel HorizontalAlignment="Center">
                         <StackPanel Margin="0,0,8,0" HorizontalAlignment="Center">
                             <StackPanel Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"
                                         Margin="0,0,0,6" MinWidth="200">
@@ -156,6 +171,9 @@
                                             <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
                                                 <Setter Property="Background" Value="#B33A3A"/>
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsContinuousMode}" Value="True">
+                                                <Setter Property="Background" Value="#B33A3A"/>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
@@ -172,6 +190,9 @@
                                                     <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                     </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsContinuousMode}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </TextBlock.Style>
@@ -186,6 +207,9 @@
                                         <TextBlock Text="(keep open)" FontSize="11" Foreground="White"
                                                    TextAlignment="Center" Margin="0"/>
                                     </StackPanel>
+                                    <TextBlock Text="Stop Transferring" FontWeight="SemiBold" Foreground="White" Margin="0"
+                                               HorizontalAlignment="Center"
+                                               Visibility="{Binding IsContinuousMode, Converter={StaticResource BoolToVis}}"/>
                                 </Grid>
                             </Button>
                             <TextBlock Text="{Binding StatusText}" HorizontalAlignment="Center"
@@ -195,6 +219,7 @@
                         <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"
                                 VerticalAlignment="Top"/>
                     </WrapPanel>
+                    </StackPanel>
                 </Border>
 
                 <DockPanel Grid.Row="2" LastChildFill="True" Margin="0,0,0,12" MinWidth="0">
@@ -278,14 +303,12 @@
                                   Margin="0,4,0,8"
                                   ToolTip="Detects OBS remux completion (stable file size + moov atom). Turn off for non-OBS remuxers."/>
 
-                        <WrapPanel Margin="0,4,0,0">
-                            <CheckBox Content="Auto-start transfer on startup" IsChecked="{Binding AutoRunOnStartup}"
-                                      VerticalAlignment="Center"/>
-                            <StackPanel Margin="0,0,16,0">
-                                <TextBlock Text="Start delay (sec)"/>
-                                <TextBox Text="{Binding AutoRunDelayText, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
-                            </StackPanel>
-                        </WrapPanel>
+                        <StackPanel Margin="0,4,0,0">
+                            <TextBlock Text="Auto-start delay (sec)" Margin="0,0,0,4"/>
+                            <TextBox Text="{Binding AutoRunDelayText, UpdateSourceTrigger=PropertyChanged}" Width="60"
+                                     HorizontalAlignment="Left"
+                                     ToolTip="Used when Auto-start mode is selected. Delay before the transfer begins after launch."/>
+                        </StackPanel>
 
                         <WrapPanel Margin="0,4,0,0">
                             <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}"

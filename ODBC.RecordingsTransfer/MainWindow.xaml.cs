@@ -55,10 +55,12 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (_viewModel.IsRunning)
+        if (_viewModel.IsRunning || _viewModel.IsContinuousMode)
         {
             var result = System.Windows.MessageBox.Show(
-                "A transfer is still running. Close anyway?",
+                _viewModel.IsContinuousMode
+                    ? "Continuous transfer mode is active. Close anyway?"
+                    : "A transfer is still running. Close anyway?",
                 "ODBC Recordings Transfer",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
