@@ -111,6 +111,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Settings" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,12"/>
@@ -165,7 +166,13 @@
                     </StackPanel>
                 </StackPanel>
 
-                <StackPanel Grid.Row="5" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
+                <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,4">
+                    <CheckBox Content="Don't warn when destination folder year doesn't match current year"
+                              IsChecked="{Binding SkipDestinationYearWarning}"
+                              ToolTip="When checked, the year mismatch prompt is skipped. Uncheck to show the warning again."/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="6" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
                     <Button Content="Save Settings" Command="{Binding SaveSettingsCommand}" Background="#555555"/>
                     <Button Content="Run Transfer" Command="{Binding RunTransferCommand}" FontWeight="SemiBold" Padding="20,6"/>
                     <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"/>

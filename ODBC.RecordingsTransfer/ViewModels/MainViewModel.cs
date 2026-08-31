@@ -241,7 +241,7 @@ public class MainViewModel : ViewModelBase
         SkipDestinationYearWarning = settings.SkipDestinationYearWarning;
     }
 
-    private bool SkipDestinationYearWarning
+    public bool SkipDestinationYearWarning
     {
         get => _skipDestinationYearWarning;
         set => SetProperty(ref _skipDestinationYearWarning, value);

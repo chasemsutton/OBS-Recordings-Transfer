@@ -10,10 +10,10 @@
     <ApplicationIcon>transfer_icon.ico</ApplicationIcon>
     <AssemblyName>ODBC Recordings Transfer</AssemblyName>
     <RootNamespace>ODBC.RecordingsTransfer</RootNamespace>
-    <Version>2.1.1</Version>
-    <AssemblyVersion>2.1.1.0</AssemblyVersion>
-    <FileVersion>2.1.1.0</FileVersion>
-    <InformationalVersion>2.1.1</InformationalVersion>
+    <Version>2.1.2</Version>
+    <AssemblyVersion>2.1.2.0</AssemblyVersion>
+    <FileVersion>2.1.2.0</FileVersion>
+    <InformationalVersion>2.1.2</InformationalVersion>
     <RepositoryUrl>https://github.com/chasemsutton/ODBC-Recordings-Transfer</RepositoryUrl>
     <Company>Open Door Baptist Church</Company>
     <Product>ODBC Recordings Transfer</Product>
