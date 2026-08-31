@@ -11,16 +11,17 @@ public partial class MainWindow : Window
     private const double ExpandedWidth = 1040;
     private const double ExpandedMinHeight = 520;
     private const double ExpandedMinWidth = 720;
-    private const double CompactWidth = 480;
-    private const double CompactHeight = 520;
     // Window min width for compact mode (includes side margins). Column min stays 0 so boxes shrink into the margin inset.
     private const double CompactMinWidth = 360;
     // Title + controls + destination + queue padding/header + 4 items (~120) + equal side/bottom margin buffer.
     private const double CompactMinHeight = 400;
 
     private readonly MainViewModel _viewModel;
+    // Session-only remembered sizes (not persisted). Compact defaults to minimum.
     private double _expandedHeight = ExpandedHeight;
     private double _expandedWidth = ExpandedWidth;
+    private double _compactHeight = CompactMinHeight;
+    private double _compactWidth = CompactMinWidth;
     private WindowState _expandedWindowState = WindowState.Normal;
     private bool _isCompact;
 
@@ -102,17 +103,17 @@ public partial class MainWindow : Window
         MinWidth = CompactMinWidth;
         MinHeight = CompactMinHeight;
 
-        if (!_isCompact || Width < CompactMinWidth || Height < CompactMinHeight)
-        {
-            Width = CompactWidth;
-            Height = CompactHeight;
-        }
+        Width = Math.Max(_compactWidth, CompactMinWidth);
+        Height = Math.Max(_compactHeight, CompactMinHeight);
 
         _isCompact = true;
     }
 
     private void ApplyExpandedLayout()
     {
+        if (_isCompact)
+            CaptureCompactLayout();
+
         SizeToContent = SizeToContent.Manual;
 
         CompactColumn.Width = new GridLength(1, GridUnitType.Star);
@@ -127,12 +128,9 @@ public partial class MainWindow : Window
         MinWidth = ExpandedMinWidth;
         MinHeight = ExpandedMinHeight;
 
-        if (_isCompact)
-        {
-            Width = Math.Max(_expandedWidth, ExpandedMinWidth);
-            Height = Math.Max(_expandedHeight, ExpandedMinHeight);
-            WindowState = _expandedWindowState;
-        }
+        Width = Math.Max(_expandedWidth, ExpandedMinWidth);
+        Height = Math.Max(_expandedHeight, ExpandedMinHeight);
+        WindowState = _expandedWindowState;
 
         _isCompact = false;
     }
@@ -143,20 +141,44 @@ public partial class MainWindow : Window
             ? WindowState.Normal
             : WindowState;
 
-        if (IsLoaded)
-        {
-            var width = WindowState == WindowState.Normal ? Width : RestoreBounds.Width;
-            var height = WindowState == WindowState.Normal ? Height : RestoreBounds.Height;
+        if (!TryGetCurrentSize(out var width, out var height))
+            return;
 
-            if (width >= ExpandedMinWidth && height >= ExpandedMinHeight)
-            {
-                _expandedWidth = width;
-                _expandedHeight = height;
-                return;
-            }
+        if (width >= ExpandedMinWidth && height >= ExpandedMinHeight)
+        {
+            _expandedWidth = width;
+            _expandedHeight = height;
+        }
+    }
+
+    private void CaptureCompactLayout()
+    {
+        if (!TryGetCurrentSize(out var width, out var height))
+            return;
+
+        _compactWidth = Math.Max(width, CompactMinWidth);
+        _compactHeight = Math.Max(height, CompactMinHeight);
+    }
+
+    private bool TryGetCurrentSize(out double width, out double height)
+    {
+        width = 0;
+        height = 0;
+
+        if (!IsLoaded)
+            return false;
+
+        if (WindowState == WindowState.Normal)
+        {
+            width = Width;
+            height = Height;
+        }
+        else
+        {
+            width = RestoreBounds.Width;
+            height = RestoreBounds.Height;
         }
 
-        _expandedWidth = ExpandedWidth;
-        _expandedHeight = ExpandedHeight;
+        return width > 0 && height > 0;
     }
 }
