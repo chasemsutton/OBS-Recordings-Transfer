@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>transfer_icon.ico</ApplicationIcon>
+    <AssemblyName>OBS Recordings Transfer</AssemblyName>
+    <RootNamespace>OBS.RecordingsTransfer</RootNamespace>
+    <Version>2.3.8</Version>
+    <AssemblyVersion>2.3.8.0</AssemblyVersion>
+    <FileVersion>2.3.8.0</FileVersion>
+    <InformationalVersion>2.3.8</InformationalVersion>
+    <RepositoryUrl>https://github.com/chasemsutton/OBS-Recordings-Transfer</RepositoryUrl>
+    <Company>Open Door Baptist Church</Company>
+    <Product>OBS Recordings Transfer</Product>
+    <Description>Transfer MP4 recordings and clean up old MKV files</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="transfer_icon.ico" />
+  </ItemGroup>
+
+</Project>

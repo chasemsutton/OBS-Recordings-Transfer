@@ -3,17 +3,17 @@ setlocal
 
 set ROOT=%~dp0
 set PUBLISH=%ROOT%publish
-set PAYLOAD=%ROOT%ODBC.RecordingsTransfer.Installer\Payload
+set PAYLOAD=%ROOT%OBS.RecordingsTransfer.Installer\Payload
 set OUTPUT=%ROOT%installer-output
 set FFMPEG_SRC=C:\Users\chase\OneDrive - Open Door Baptist Church (1)\Public\Media Ministry\Software\Custom Made Programs\Transfer Recordings Program\Transfer Recordings Application\FFmpeg
 
 echo ============================================
-echo  ODBC Recordings Transfer - Full Build
+echo  OBS Recordings Transfer - Full Build
 echo ============================================
 echo.
 
 echo [1/5] Publishing application...
-cd /d "%ROOT%ODBC.RecordingsTransfer"
+cd /d "%ROOT%OBS.RecordingsTransfer"
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "%PUBLISH%"
 if %ERRORLEVEL% NEQ 0 (
     echo Application publish failed!
@@ -41,7 +41,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo [4/5] Building installer...
-cd /d "%ROOT%ODBC.RecordingsTransfer.Installer"
+cd /d "%ROOT%OBS.RecordingsTransfer.Installer"
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "%OUTPUT%"
 if %ERRORLEVEL% NEQ 0 (
     echo Installer build failed!
@@ -55,8 +55,8 @@ del "%PAYLOAD%\app.zip" 2>nul
 echo.
 echo ============================================
 echo  Done!
-echo  App:       publish\ODBC Recordings Transfer.exe
-echo  Installer: installer-output\ODBC Recordings Transfer Setup.exe
+echo  App:       publish\OBS Recordings Transfer.exe
+echo  Installer: installer-output\OBS Recordings Transfer Setup.exe
 echo ============================================
 
 endlocal

@@ -23,29 +23,29 @@ jobs:
       - name: Publish application
         shell: cmd
         run: |
-          cd ODBC.RecordingsTransfer
+          cd OBS.RecordingsTransfer
           dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ..\publish
 
       - name: Package installer payload
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path ODBC.RecordingsTransfer.Installer\Payload | Out-Null
-          Compress-Archive -Path publish\* -DestinationPath ODBC.RecordingsTransfer.Installer\Payload\app.zip -Force
+          New-Item -ItemType Directory -Force -Path OBS.RecordingsTransfer.Installer\Payload | Out-Null
+          Compress-Archive -Path publish\* -DestinationPath OBS.RecordingsTransfer.Installer\Payload\app.zip -Force
 
       - name: Build installer
         shell: cmd
         run: |
-          cd ODBC.RecordingsTransfer.Installer
+          cd OBS.RecordingsTransfer.Installer
           dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ..\installer-output
 
       - name: Prepare release asset
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          Copy-Item "installer-output\ODBC Recordings Transfer Setup.exe" "installer-output\ODBC-Recordings-Transfer-Setup-$version.exe"
+          Copy-Item "installer-output\OBS Recordings Transfer Setup.exe" "installer-output\OBS-Recordings-Transfer-Setup-$version.exe"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: installer-output/ODBC-Recordings-Transfer-Setup-*.exe
+          files: installer-output/OBS-Recordings-Transfer-Setup-*.exe
           generate_release_notes: true
