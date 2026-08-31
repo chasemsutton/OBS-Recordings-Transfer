@@ -1,0 +1,241 @@
+using System.Diagnostics;
+using System.IO.Compression;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using Microsoft.Win32;
+
+namespace ODBC.RecordingsTransfer.Installer;
+
+internal static class Program
+{
+    private const string AppName = "ODBC Recordings Transfer";
+    private const string ExeName = "ODBC Recordings Transfer.exe";
+    private const string Version = "2.0.0";
+    private const string Publisher = "Open Door Baptist Church";
+    private const string UninstallKeyName = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8F4E2A91-6C3D-4B7E-9F1A-2D5E8C0B4A73}";
+
+    [STAThread]
+    private static int Main(string[] args)
+    {
+        ApplicationConfiguration.Initialize();
+
+        var installDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            AppName);
+
+        if (args.Any(a => a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase)
+                       || a.Equals("-uninstall", StringComparison.OrdinalIgnoreCase)))
+        {
+            return Uninstall(installDir);
+        }
+
+        return Install(installDir);
+    }
+
+    private static int Install(string installDir)
+    {
+        if (Directory.Exists(installDir) &&
+            MessageBox.Show(
+                $"{AppName} appears to be already installed.\n\nReinstall to the same location?",
+                AppName,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ODBC-Recordings-Setup-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                ExtractPayload(tempDir);
+                CopyPayload(tempDir, installDir);
+            }
+            finally
+            {
+                try { Directory.Delete(tempDir, true); } catch { /* best effort */ }
+            }
+
+            var exePath = Path.Combine(installDir, ExeName);
+            CreateShortcut(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), AppName + ".lnk"),
+                exePath);
+
+            if (MessageBox.Show("Create a desktop shortcut?", AppName,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                CreateShortcut(
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), AppName + ".lnk"),
+                    exePath);
+            }
+
+            WriteDefaultConfig(installDir);
+            RegisterUninstall(installDir);
+
+            var launch = MessageBox.Show(
+                $"{AppName} was installed successfully.\n\nLocation:\n{installDir}\n\nLaunch the app now?",
+                AppName,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+
+            if (launch == DialogResult.Yes)
+                Process.Start(new ProcessStartInfo(exePath) { UseShellExecute = true });
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Installation failed:\n\n{ex.Message}",
+                AppName,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return 1;
+        }
+    }
+
+    private static int Uninstall(string installDir)
+    {
+        if (!Directory.Exists(installDir))
+        {
+            MessageBox.Show("This program does not appear to be installed.", AppName,
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return 0;
+        }
+
+        if (MessageBox.Show(
+                $"Remove {AppName} from this computer?",
+                AppName,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning) != DialogResult.Yes)
+        {
+            return 0;
+        }
+
+        try
+        {
+            foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExeName)))
+            {
+                try { process.Kill(); process.WaitForExit(5000); } catch { /* ignore */ }
+            }
+
+            Directory.Delete(installDir, true);
+
+            var startMenuLink = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+                AppName + ".lnk");
+            if (File.Exists(startMenuLink))
+                File.Delete(startMenuLink);
+
+            var desktopLink = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+                AppName + ".lnk");
+            if (File.Exists(desktopLink))
+                File.Delete(desktopLink);
+
+            using var key = Registry.LocalMachine.OpenSubKey(UninstallKeyName, writable: true);
+            key?.Close();
+            Registry.LocalMachine.DeleteSubKey(UninstallKeyName, throwOnMissingSubKey: false);
+
+            MessageBox.Show($"{AppName} was removed.", AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Uninstall failed:\n\n{ex.Message}", AppName,
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return 1;
+        }
+    }
+
+    private static void ExtractPayload(string destination)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var resourceName = assembly.GetManifestResourceNames()
+            .FirstOrDefault(n => n.EndsWith("app.zip", StringComparison.OrdinalIgnoreCase));
+
+        if (resourceName == null)
+            throw new InvalidOperationException("Installer payload is missing. Rebuild using build-installer.bat.");
+
+        using var stream = assembly.GetManifestResourceStream(resourceName)!;
+        var zipPath = Path.Combine(Path.GetTempPath(), "odbc-payload-" + Guid.NewGuid().ToString("N") + ".zip");
+        try
+        {
+            using (var file = File.Create(zipPath))
+                stream.CopyTo(file);
+
+            ZipFile.ExtractToDirectory(zipPath, destination, overwriteFiles: true);
+        }
+        finally
+        {
+            if (File.Exists(zipPath))
+                File.Delete(zipPath);
+        }
+    }
+
+    private static void CopyPayload(string sourceDir, string installDir)
+    {
+        Directory.CreateDirectory(installDir);
+
+        foreach (var file in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(sourceDir, file);
+            var target = Path.Combine(installDir, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: true);
+        }
+    }
+
+    private static void CreateShortcut(string shortcutPath, string targetPath)
+    {
+        var shellType = Type.GetTypeFromProgID("WScript.Shell")
+            ?? throw new InvalidOperationException("Could not create Start Menu shortcut.");
+        dynamic shell = Activator.CreateInstance(shellType)!;
+        dynamic shortcut = shell.CreateShortcut(shortcutPath);
+        shortcut.TargetPath = targetPath;
+        shortcut.WorkingDirectory = Path.GetDirectoryName(targetPath);
+        shortcut.Description = AppName;
+        shortcut.Save();
+
+        if (Marshal.IsComObject(shell))
+            Marshal.ReleaseComObject(shell);
+    }
+
+    private static void WriteDefaultConfig(string installDir)
+    {
+        var configPath = Path.Combine(installDir, "config.txt");
+        if (File.Exists(configPath))
+            return;
+
+        File.WriteAllText(configPath,
+            "Source Path: \"\"\r\n" +
+            "Destination Path: \"\"\r\n" +
+            "Max File Age (days): \"90\"\r\n" +
+            "Minimum Free Space (GB): \"25\"\r\n" +
+            "Auto Close Timer (seconds): \"15\"\r\n" +
+            "Verify Transfer: \"False\"\r\n" +
+            "Verify Remux: \"False\"\r\n" +
+            "Begin Transfer On Startup: \"False\"\r\n" +
+            "Check For Updates On Startup: \"True\"\r\n");
+    }
+
+    private static void RegisterUninstall(string installDir)
+    {
+        var setupExe = Environment.ProcessPath
+            ?? Process.GetCurrentProcess().MainModule?.FileName
+            ?? AppContext.BaseDirectory;
+
+        using var key = Registry.LocalMachine.CreateSubKey(UninstallKeyName, writable: true);
+        key.SetValue("DisplayName", AppName);
+        key.SetValue("DisplayVersion", Version);
+        key.SetValue("Publisher", Publisher);
+        key.SetValue("InstallLocation", installDir);
+        key.SetValue("DisplayIcon", Path.Combine(installDir, ExeName));
+        key.SetValue("UninstallString", $"\"{setupExe}\" /uninstall");
+        key.SetValue("NoModify", 1, RegistryValueKind.DWord);
+        key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+    }
+}

@@ -1,0 +1,5 @@
+Source Path: "C:\Users\MediaAdmin\Videos"
+Destination Path: "M:\Raws\Service\2025"
+Max File Age (days): "90"
+Minimum Free Space (GB): "25"
+Auto Close Timer (seconds): "15"

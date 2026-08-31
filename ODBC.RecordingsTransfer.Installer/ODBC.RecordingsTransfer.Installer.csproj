@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>ODBC Recordings Transfer Setup</AssemblyName>
+    <RootNamespace>ODBC.RecordingsTransfer.Installer</RootNamespace>
+    <Version>2.0.0</Version>
+    <Company>Open Door Baptist Church</Company>
+    <Product>ODBC Recordings Transfer Setup</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Payload\app.zip" Condition="Exists('Payload\app.zip')" />
+  </ItemGroup>
+
+</Project>
