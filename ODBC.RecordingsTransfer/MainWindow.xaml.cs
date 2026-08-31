@@ -13,8 +13,10 @@ public partial class MainWindow : Window
     private const double ExpandedMinWidth = 720;
     private const double CompactWidth = 480;
     private const double CompactHeight = 520;
+    // Window min width for compact mode (includes side margins). Column min stays 0 so boxes shrink into the margin inset.
     private const double CompactMinWidth = 360;
-    private const double CompactMinHeight = 420;
+    // Title + controls + destination + queue padding/header + 4 items (~120) + equal side/bottom margin buffer.
+    private const double CompactMinHeight = 400;
 
     private readonly MainViewModel _viewModel;
     private double _expandedHeight = ExpandedHeight;
@@ -89,7 +91,7 @@ public partial class MainWindow : Window
         SizeToContent = SizeToContent.Manual;
 
         CompactColumn.Width = new GridLength(1, GridUnitType.Star);
-        CompactColumn.MinWidth = CompactMinWidth;
+        CompactColumn.MinWidth = 0;
         SettingsColumn.Width = new GridLength(0);
         SettingsColumn.MinWidth = 0;
         MainBodyRow.Height = new GridLength(1, GridUnitType.Star);
@@ -114,9 +116,9 @@ public partial class MainWindow : Window
         SizeToContent = SizeToContent.Manual;
 
         CompactColumn.Width = new GridLength(1, GridUnitType.Star);
-        CompactColumn.MinWidth = 320;
+        CompactColumn.MinWidth = 0;
         SettingsColumn.Width = new GridLength(1.4, GridUnitType.Star);
-        SettingsColumn.MinWidth = 360;
+        SettingsColumn.MinWidth = 280;
         MainBodyRow.Height = new GridLength(1, GridUnitType.Star);
         MainBodyRow.MinHeight = 280;
         ActivityLogRow.Height = new GridLength(1, GridUnitType.Star);
