@@ -10,6 +10,7 @@ public class TransferService
 {
     private const string Mp4Extension = ".mp4";
     private const string MkvExtension = ".mkv";
+    private const int CopyBufferSize = 81920;
 
     private readonly LoggingService _logger;
 
@@ -18,15 +19,55 @@ public class TransferService
         _logger = logger;
     }
 
-    public TransferResult Run(AppSettings settings, TransferContext? context = null, IProgress<string>? progress = null)
+    public List<TransferActionPlan> BuildPlan(AppSettings settings)
+    {
+        var plan = new List<TransferActionPlan>();
+
+        if (!Directory.Exists(settings.SourcePath) || !Directory.Exists(settings.DestinationPath))
+            return plan;
+
+        var sourceFiles = Directory.GetFiles(settings.SourcePath);
+        var targetFiles = Directory.GetFiles(settings.DestinationPath);
+        var sourceNames = sourceFiles.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+        var targetNames = targetFiles.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+
+        var mp4Files = sourceFiles
+            .Where(f => string.Equals(Path.GetExtension(f), Mp4Extension, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var mkvFiles = sourceFiles
+            .Where(f => string.Equals(Path.GetExtension(f), MkvExtension, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var dataToDelete = CalculateSpaceNeeded(settings, sourceFiles);
+
+        foreach (var mp4 in mp4Files)
+            AddMp4PlanItem(mp4, settings, targetNames, plan);
+
+        foreach (var mkv in mkvFiles)
+            AddMkvPlanItem(mkv, settings, sourceNames, targetNames, dataToDelete, plan);
+
+        return plan;
+    }
+
+    public TransferResult Run(
+        AppSettings settings,
+        TransferContext? context = null,
+        IProgress<TransferProgressUpdate>? progress = null)
     {
         var result = new TransferResult();
 
-        void Report(string message)
+        void Report(TransferProgressUpdate update)
         {
-            progress?.Report(message);
-            _logger.Write(message);
+            progress?.Report(update);
+            if (!string.IsNullOrWhiteSpace(update.Message))
+                _logger.Write(update.Message);
         }
+
+        void Log(string message) => Report(new TransferProgressUpdate
+        {
+            Kind = TransferProgressUpdateKind.Log,
+            Message = message
+        });
 
         try
         {
@@ -34,9 +75,13 @@ public class TransferService
             {
                 var error = "Source or destination path does not exist.";
                 result.Errors.Add(error);
-                Report(error);
+                Log(error);
                 return result;
             }
+
+            var plan = BuildPlan(settings);
+            foreach (var item in plan)
+                result.Detected.Add(item.FileName);
 
             var sourceFiles = Directory.GetFiles(settings.SourcePath);
             var targetFiles = Directory.GetFiles(settings.DestinationPath);
@@ -49,9 +94,6 @@ public class TransferService
             var mkvFiles = sourceFiles
                 .Where(f => string.Equals(Path.GetExtension(f), MkvExtension, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-
-            foreach (var file in mp4Files.Concat(mkvFiles))
-                result.Detected.Add(Path.GetFileName(file)!);
 
             var dataToDelete = CalculateSpaceNeeded(settings, sourceFiles);
 
@@ -67,10 +109,67 @@ public class TransferService
         {
             result.Errors.Add(ex.Message);
             ErrorLogService.Write(ex);
-            Report($"ERROR: {ex.Message}");
+            Log($"ERROR: {ex.Message}");
         }
 
         return result;
+    }
+
+    private static void AddMp4PlanItem(
+        string sourceFile,
+        AppSettings settings,
+        HashSet<string?> targetNames,
+        List<TransferActionPlan> plan)
+    {
+        var fileName = Path.GetFileName(sourceFile)!;
+
+        if (targetNames.Contains(fileName))
+        {
+            plan.Add(new TransferActionPlan
+            {
+                FileName = fileName,
+                ActionType = TransferActionType.Skip,
+                Description = $"Skip (already at destination): {fileName}"
+            });
+            return;
+        }
+
+        plan.Add(new TransferActionPlan
+        {
+            FileName = fileName,
+            ActionType = TransferActionType.Move,
+            Description = $"Move: {fileName}"
+        });
+    }
+
+    private static void AddMkvPlanItem(
+        string sourceFile,
+        AppSettings settings,
+        HashSet<string?> sourceNames,
+        HashSet<string?> targetNames,
+        double dataToDelete,
+        List<TransferActionPlan> plan)
+    {
+        var fileName = Path.GetFileName(sourceFile)!;
+        var mp4Name = Path.GetFileNameWithoutExtension(fileName) + Mp4Extension;
+        var fileAge = DateTime.Now - File.GetCreationTime(sourceFile);
+
+        var shouldDelete = fileAge.TotalDays > settings.MaxFileAgeDays
+            || (dataToDelete > 0 && fileAge.TotalDays > 8);
+
+        if (!shouldDelete)
+            return;
+
+        var mp4Exists = sourceNames.Contains(mp4Name) || targetNames.Contains(mp4Name);
+        if (!mp4Exists)
+            return;
+
+        plan.Add(new TransferActionPlan
+        {
+            FileName = fileName,
+            ActionType = TransferActionType.Delete,
+            Description = $"Delete old MKV: {fileName}"
+        });
     }
 
     private static double CalculateSpaceNeeded(AppSettings settings, string[] sourceFiles)
@@ -96,21 +195,47 @@ public class TransferService
         HashSet<string?> targetNames,
         TransferResult result,
         TransferContext? context,
-        Action<string> report)
+        Action<TransferProgressUpdate> report)
     {
         var fileName = Path.GetFileName(sourceFile)!;
 
         if (targetNames.Contains(fileName))
         {
             result.Left.Add(fileName);
-            report($"Skipped (already at destination): {fileName}");
+            report(new TransferProgressUpdate
+            {
+                Kind = TransferProgressUpdateKind.Skipped,
+                FileName = fileName,
+                ActionType = TransferActionType.Skip,
+                Message = $"Skipped (already at destination): {fileName}"
+            });
             return;
         }
 
-        if (settings.VerifyRemux && !IsRemuxComplete(sourceFile, report))
+        report(new TransferProgressUpdate
+        {
+            Kind = TransferProgressUpdateKind.Start,
+            FileName = fileName,
+            ActionType = TransferActionType.Move,
+            Progress = 0,
+            Message = $"Starting: {fileName}"
+        });
+
+        if (settings.VerifyRemux && !IsRemuxComplete(sourceFile, message => report(new TransferProgressUpdate
+        {
+            Kind = TransferProgressUpdateKind.Log,
+            FileName = fileName,
+            Message = message
+        })))
         {
             result.Left.Add(fileName);
-            report($"Remux validation failed, leaving: {fileName}");
+            report(new TransferProgressUpdate
+            {
+                Kind = TransferProgressUpdateKind.Skipped,
+                FileName = fileName,
+                ActionType = TransferActionType.Skip,
+                Message = $"Remux validation failed, leaving: {fileName}"
+            });
             return;
         }
 
@@ -124,20 +249,37 @@ public class TransferService
                 if (File.Exists(destFile))
                     File.Delete(destFile);
 
-                report($"Copying: {fileName}");
-                File.Copy(sourceFile, destFile);
+                CopyFileWithProgress(sourceFile, destFile, value => report(new TransferProgressUpdate
+                {
+                    Kind = TransferProgressUpdateKind.Progress,
+                    FileName = fileName,
+                    ActionType = TransferActionType.Move,
+                    Progress = value,
+                    Message = $"Copying: {fileName}"
+                }));
 
                 if (settings.VerifyTransfer)
                 {
-                    report($"Verifying transfer: {fileName}");
+                    report(new TransferProgressUpdate
+                    {
+                        Kind = TransferProgressUpdateKind.Log,
+                        FileName = fileName,
+                        Message = $"Verifying transfer: {fileName}"
+                    });
+
                     var sourceHash = ComputeMd5(sourceFile);
                     var destHash = ComputeMd5(destFile);
 
                     if (!string.Equals(sourceHash, destHash, StringComparison.Ordinal))
                     {
-                        report($"Transfer verification failed: {fileName}");
-                        retry = context?.ConfirmRetry?.Invoke(fileName) ?? false;
+                        report(new TransferProgressUpdate
+                        {
+                            Kind = TransferProgressUpdateKind.Log,
+                            FileName = fileName,
+                            Message = $"Transfer verification failed: {fileName}"
+                        });
 
+                        retry = context?.ConfirmRetry?.Invoke(fileName) ?? false;
                         if (retry)
                         {
                             if (File.Exists(destFile))
@@ -146,27 +288,58 @@ public class TransferService
                         }
 
                         result.Errors.Add($"Transfer verification failed: {fileName}");
+                        report(new TransferProgressUpdate
+                        {
+                            Kind = TransferProgressUpdateKind.Failed,
+                            FileName = fileName,
+                            ActionType = TransferActionType.Move,
+                            Message = $"Failed: {fileName}"
+                        });
                         return;
                     }
 
-                    report($"Transfer verified: {fileName}");
+                    report(new TransferProgressUpdate
+                    {
+                        Kind = TransferProgressUpdateKind.Log,
+                        FileName = fileName,
+                        Message = $"Transfer verified: {fileName}"
+                    });
                 }
 
                 File.Delete(sourceFile);
                 result.Moved.Add(fileName);
                 targetNames.Add(fileName);
-                report($"Moved: {fileName}");
+                report(new TransferProgressUpdate
+                {
+                    Kind = TransferProgressUpdateKind.Complete,
+                    FileName = fileName,
+                    ActionType = TransferActionType.Move,
+                    Progress = 1,
+                    Message = $"Moved: {fileName}"
+                });
                 return;
             }
             catch (Exception ex)
             {
-                report($"Error transferring {fileName}: {ex.Message}");
-                retry = context?.ConfirmRetry?.Invoke(fileName) ?? false;
+                report(new TransferProgressUpdate
+                {
+                    Kind = TransferProgressUpdateKind.Log,
+                    FileName = fileName,
+                    Message = $"Error transferring {fileName}: {ex.Message}"
+                });
 
+                retry = context?.ConfirmRetry?.Invoke(fileName) ?? false;
                 if (!retry)
                 {
                     result.Errors.Add($"{fileName}: {ex.Message}");
                     ErrorLogService.Write(ex);
+                    report(new TransferProgressUpdate
+                    {
+                        Kind = TransferProgressUpdateKind.Failed,
+                        FileName = fileName,
+                        ActionType = TransferActionType.Move,
+                        Message = $"Failed: {fileName}"
+                    });
                     return;
                 }
             }
@@ -180,7 +353,7 @@ public class TransferService
         HashSet<string?> targetNames,
         double dataToDelete,
         TransferResult result,
-        Action<string> report)
+        Action<TransferProgressUpdate> report)
     {
         var fileName = Path.GetFileName(sourceFile)!;
         var mp4Name = Path.GetFileNameWithoutExtension(fileName) + Mp4Extension;
@@ -196,31 +369,69 @@ public class TransferService
         }
 
         var mp4Exists = sourceNames.Contains(mp4Name) || targetNames.Contains(mp4Name);
-
         if (!mp4Exists)
         {
             result.Left.Add(fileName);
             return;
         }
 
+        report(new TransferProgressUpdate
+        {
+            Kind = TransferProgressUpdateKind.Start,
+            FileName = fileName,
+            ActionType = TransferActionType.Delete,
+            Progress = 0,
+            Message = $"Deleting: {fileName}"
+        });
+
         try
         {
             File.Delete(sourceFile);
             result.Deleted.Add(fileName);
-            report($"Deleted old MKV: {fileName}");
+            report(new TransferProgressUpdate
+            {
+                Kind = TransferProgressUpdateKind.Complete,
+                FileName = fileName,
+                ActionType = TransferActionType.Delete,
+                Progress = 1,
+                Message = $"Deleted old MKV: {fileName}"
+            });
         }
         catch (Exception ex)
         {
             result.Errors.Add($"{fileName}: {ex.Message}");
-            report($"Error deleting {fileName}: {ex.Message}");
+            report(new TransferProgressUpdate
+            {
+                Kind = TransferProgressUpdateKind.Failed,
+                FileName = fileName,
+                ActionType = TransferActionType.Delete,
+                Message = $"Error deleting {fileName}: {ex.Message}"
+            });
             ErrorLogService.Write(ex);
+        }
+    }
+
+    private static void CopyFileWithProgress(string source, string destination, Action<double> reportProgress)
+    {
+        var length = new FileInfo(source).Length;
+        long copied = 0;
+
+        using var input = File.OpenRead(source);
+        using var output = File.Create(destination);
+        var buffer = new byte[CopyBufferSize];
+
+        int read;
+        while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            output.Write(buffer, 0, read);
+            copied += read;
+            reportProgress(length > 0 ? copied / (double)length : 1);
         }
     }
 
     private static bool IsRemuxComplete(string sourceFile, Action<string> report)
     {
         var ffmpegPath = FFmpegService.FindExecutable();
-
         if (ffmpegPath == null)
         {
             report("FFmpeg not found; skipping remux validation.");

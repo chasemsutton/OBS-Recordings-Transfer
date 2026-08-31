@@ -27,7 +27,10 @@ public class MainViewModel : ViewModelBase
     private bool _verifyTransfer;
     private bool _verifyRemux;
     private bool _autoRunOnStartup;
+    private string _autoRunDelayText = "5";
     private bool _checkForUpdatesOnStartup = true;
+    private string _updateChannelName = "Stable";
+    private bool _skipDestinationYearWarning;
     private bool _isRunning;
     private bool _isCheckingForUpdates;
     private string _statusText = "Ready";
@@ -47,7 +50,8 @@ public class MainViewModel : ViewModelBase
 
         AppVersion = $"v{_updateService.CurrentVersion}";
 
-        FileActions = new ObservableCollection<string>();
+        TransferItems = new ObservableCollection<TransferActionViewModel>();
+        UpdateChannels = new ObservableCollection<string> { "Stable", "Beta" };
 
         LoadSettings();
 
@@ -62,8 +66,8 @@ public class MainViewModel : ViewModelBase
     }
 
     public string AppVersion { get; }
-
-    public ObservableCollection<string> FileActions { get; }
+    public ObservableCollection<TransferActionViewModel> TransferItems { get; }
+    public ObservableCollection<string> UpdateChannels { get; }
 
     public event Action? RequestClose;
 
@@ -115,10 +119,22 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _autoRunOnStartup, value);
     }
 
+    public string AutoRunDelayText
+    {
+        get => _autoRunDelayText;
+        set => SetProperty(ref _autoRunDelayText, value);
+    }
+
     public bool CheckForUpdatesOnStartup
     {
         get => _checkForUpdatesOnStartup;
         set => SetProperty(ref _checkForUpdatesOnStartup, value);
+    }
+
+    public string UpdateChannelName
+    {
+        get => _updateChannelName;
+        set => SetProperty(ref _updateChannelName, value);
     }
 
     public bool IsCheckingForUpdates
@@ -195,7 +211,17 @@ public class MainViewModel : ViewModelBase
             await CheckForUpdatesAsync(manual: false);
 
         if (AutoRunOnStartup)
+        {
+            var delay = ParseAutoRunDelay();
+            if (delay > 0)
+            {
+                StatusText = $"Auto-starting transfer in {delay} second{(delay == 1 ? "" : "s")}...";
+                AppendLog($"Auto-start transfer scheduled in {delay} second{(delay == 1 ? "" : "s")}.");
+                await Task.Delay(TimeSpan.FromSeconds(delay));
+            }
+
             await RunTransferAsync();
+        }
     }
 
     private void LoadSettings()
@@ -209,7 +235,16 @@ public class MainViewModel : ViewModelBase
         VerifyTransfer = settings.VerifyTransfer;
         VerifyRemux = settings.VerifyRemux;
         AutoRunOnStartup = settings.AutoRunOnStartup;
+        AutoRunDelayText = settings.AutoRunDelaySeconds.ToString();
         CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
+        UpdateChannelName = settings.UpdateChannel.ToString();
+        SkipDestinationYearWarning = settings.SkipDestinationYearWarning;
+    }
+
+    private bool SkipDestinationYearWarning
+    {
+        get => _skipDestinationYearWarning;
+        set => SetProperty(ref _skipDestinationYearWarning, value);
     }
 
     private void SaveSettings()
@@ -229,18 +264,37 @@ public class MainViewModel : ViewModelBase
         VerifyTransfer = VerifyTransfer,
         VerifyRemux = VerifyRemux,
         AutoRunOnStartup = AutoRunOnStartup,
-        CheckForUpdatesOnStartup = CheckForUpdatesOnStartup
+        AutoRunDelaySeconds = ParseAutoRunDelay(),
+        CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
+        UpdateChannel = ParseUpdateChannel(),
+        SkipDestinationYearWarning = SkipDestinationYearWarning
     };
+
+    private int ParseAutoRunDelay()
+    {
+        return string.IsNullOrWhiteSpace(AutoRunDelayText) || !int.TryParse(AutoRunDelayText, out var seconds) || seconds < 0
+            ? 5
+            : seconds;
+    }
+
+    private UpdateChannel ParseUpdateChannel()
+    {
+        return Enum.TryParse<UpdateChannel>(UpdateChannelName, true, out var channel)
+            ? channel
+            : UpdateChannel.Stable;
+    }
 
     private async Task CheckForUpdatesAsync(bool manual)
     {
         IsCheckingForUpdates = true;
+        var channel = ParseUpdateChannel();
+
         if (manual)
-            StatusText = "Checking for updates...";
+            StatusText = $"Checking for {channel.ToString().ToLower()} updates...";
 
         try
         {
-            var update = await _updateService.CheckForUpdateAsync();
+            var update = await _updateService.CheckForUpdateAsync(channel);
 
             if (update == null)
             {
@@ -248,13 +302,16 @@ public class MainViewModel : ViewModelBase
                 {
                     StatusText = "You're up to date";
                     System.Windows.MessageBox.Show(
-                        $"You're running the latest version ({_updateService.CurrentVersion}).",
+                        $"You're running the latest {channel.ToString().ToLower()} version ({_updateService.CurrentVersion}).",
                         "No Updates",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
                 }
                 return;
             }
+
+            StatusText = $"Update available: v{update.Version} ({channel})";
+            AppendLog($"Update available on {channel} channel: v{update.Version}");
 
             var window = new UpdateWindow(_updateService, update)
             {
@@ -286,29 +343,73 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private bool ConfirmDestinationPath()
+    {
+        if (SkipDestinationYearWarning)
+            return true;
+
+        var trimmed = DestinationPath.TrimEnd('\\', '/');
+        if (trimmed.Length < 4)
+            return true;
+
+        var suffix = trimmed[^4..];
+        if (!suffix.All(char.IsDigit) || !int.TryParse(suffix, out var folderYear))
+            return true;
+
+        var currentYear = DateTime.Now.Year;
+        if (folderYear == currentYear)
+            return true;
+
+        var owner = System.Windows.Application.Current.MainWindow;
+        var dialog = new ConfirmDestinationWindow(DestinationPath, folderYear, currentYear)
+        {
+            Owner = owner
+        };
+
+        var confirmed = dialog.ShowDialog() == true;
+        if (dialog.DontAskAgain)
+        {
+            SkipDestinationYearWarning = true;
+            _configService.Save(ToSettings());
+        }
+
+        return confirmed;
+    }
+
     private async Task RunTransferAsync()
     {
+        if (!ConfirmDestinationPath())
+        {
+            StatusText = "Transfer cancelled";
+            AppendLog("Transfer cancelled by user (destination year warning).");
+            return;
+        }
+
         CancelAutoClose();
         IsRunning = true;
         StatusText = "Running transfer...";
         ResetCounts();
-        FileActions.Clear();
+        TransferItems.Clear();
 
         var settings = ToSettings();
         _configService.Save(settings);
 
-        var progress = new Progress<string>(message =>
+        var plan = _transferService.BuildPlan(settings);
+        var itemLookup = new Dictionary<string, TransferActionViewModel>(StringComparer.OrdinalIgnoreCase);
+        foreach (var planItem in plan)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
-            {
-                AppendLog(message);
-                if (message.StartsWith("Moved:", StringComparison.Ordinal))
-                    FileActions.Add("✓ " + message[6..].Trim());
-                else if (message.StartsWith("Deleted", StringComparison.Ordinal))
-                    FileActions.Add("✗ " + message);
-                else if (message.StartsWith("Skipped", StringComparison.Ordinal))
-                    FileActions.Add("– " + message);
-            });
+            var vm = new TransferActionViewModel(planItem);
+            TransferItems.Add(vm);
+            itemLookup[planItem.FileName] = vm;
+            AppendLog($"Planned: {planItem.Description}");
+        }
+
+        if (plan.Count == 0)
+            AppendLog("No file actions planned.");
+
+        var progress = new Progress<TransferProgressUpdate>(update =>
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() => HandleTransferUpdate(update, itemLookup));
         });
 
         var context = new TransferContext
@@ -363,6 +464,59 @@ public class MainViewModel : ViewModelBase
         finally
         {
             IsRunning = false;
+        }
+    }
+
+    private void HandleTransferUpdate(TransferProgressUpdate update, Dictionary<string, TransferActionViewModel> itemLookup)
+    {
+        if (update.Kind == TransferProgressUpdateKind.Log && !string.IsNullOrWhiteSpace(update.Message))
+        {
+            AppendLog(update.Message);
+            return;
+        }
+
+        if (update.Kind == TransferProgressUpdateKind.Plan)
+        {
+            if (!string.IsNullOrWhiteSpace(update.Message))
+                AppendLog($"Planned: {update.Message}");
+            return;
+        }
+
+        if (!itemLookup.TryGetValue(update.FileName, out var item))
+            return;
+
+        switch (update.Kind)
+        {
+            case TransferProgressUpdateKind.Start:
+                item.Status = TransferActionStatus.InProgress;
+                item.Progress = 0;
+                if (!string.IsNullOrWhiteSpace(update.Message))
+                    AppendLog(update.Message);
+                break;
+
+            case TransferProgressUpdateKind.Progress:
+                item.Status = TransferActionStatus.InProgress;
+                item.Progress = update.Progress;
+                break;
+
+            case TransferProgressUpdateKind.Complete:
+                item.Status = TransferActionStatus.Complete;
+                item.Progress = 1;
+                if (!string.IsNullOrWhiteSpace(update.Message))
+                    AppendLog(update.Message);
+                break;
+
+            case TransferProgressUpdateKind.Skipped:
+                item.Status = TransferActionStatus.Skipped;
+                if (!string.IsNullOrWhiteSpace(update.Message))
+                    AppendLog(update.Message);
+                break;
+
+            case TransferProgressUpdateKind.Failed:
+                item.Status = TransferActionStatus.Failed;
+                if (!string.IsNullOrWhiteSpace(update.Message))
+                    AppendLog(update.Message);
+                break;
         }
     }
 

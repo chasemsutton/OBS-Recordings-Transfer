@@ -14,46 +14,26 @@ public class UpdateService
 
     public Version CurrentVersion { get; } = GetCurrentVersion();
 
-    public async Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken cancellationToken = default)
+    public async Task<UpdateInfo?> CheckForUpdateAsync(
+        UpdateChannel channel = UpdateChannel.Stable,
+        CancellationToken cancellationToken = default)
     {
-        var url = $"https://api.github.com/repos/{UpdateConfig.GitHubOwner}/{UpdateConfig.GitHubRepo}/releases/latest";
-        using var response = await Http.GetAsync(url, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        var release = channel == UpdateChannel.Stable
+            ? await GetLatestStableReleaseAsync(cancellationToken)
+            : await GetLatestBetaReleaseAsync(cancellationToken);
+
+        if (release == null)
             return null;
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-        var root = document.RootElement;
-
-        var tagName = root.GetProperty("tag_name").GetString() ?? "";
+        var tagName = release.Value.TagName;
         var version = ParseVersion(tagName);
         if (version <= CurrentVersion)
             return null;
 
-        var downloadUrl = "";
-        var fileName = "";
-        if (root.TryGetProperty("assets", out var assets))
-        {
-            foreach (var asset in assets.EnumerateArray())
-            {
-                var name = asset.GetProperty("name").GetString() ?? "";
-                if (!name.EndsWith(UpdateConfig.InstallerAssetSuffix, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                if (!name.StartsWith(UpdateConfig.InstallerAssetPrefix, StringComparison.OrdinalIgnoreCase)
-                    && !name.Contains("Recordings Transfer Setup", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                downloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
-                fileName = name;
-                break;
-            }
-        }
-
-        if (string.IsNullOrEmpty(downloadUrl))
+        if (!TryGetInstallerAsset(release.Value.Root, out var downloadUrl, out var fileName))
             return null;
 
-        var notes = root.TryGetProperty("body", out var body)
+        var notes = release.Value.Root.TryGetProperty("body", out var body)
             ? body.GetString() ?? ""
             : "";
 
@@ -63,7 +43,8 @@ public class UpdateService
             TagName = tagName,
             ReleaseNotes = notes.Trim(),
             DownloadUrl = downloadUrl,
-            FileName = fileName
+            FileName = fileName,
+            Channel = channel
         };
     }
 
@@ -103,18 +84,76 @@ public class UpdateService
 
     public void LaunchInstaller(string installerPath)
     {
-        Process.Start(new ProcessStartInfo(installerPath)
+        Process.Start(new ProcessStartInfo(installerPath) { UseShellExecute = true });
+    }
+
+    private static async Task<(JsonElement Root, string TagName)?> GetLatestStableReleaseAsync(CancellationToken cancellationToken)
+    {
+        var url = $"https://api.github.com/repos/{UpdateConfig.GitHubOwner}/{UpdateConfig.GitHubRepo}/releases/latest";
+        using var response = await Http.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var root = document.RootElement.Clone();
+        var tagName = root.GetProperty("tag_name").GetString() ?? "";
+        return (root, tagName);
+    }
+
+    private static async Task<(JsonElement Root, string TagName)?> GetLatestBetaReleaseAsync(CancellationToken cancellationToken)
+    {
+        var url = $"https://api.github.com/repos/{UpdateConfig.GitHubOwner}/{UpdateConfig.GitHubRepo}/releases?per_page=20";
+        using var response = await Http.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        foreach (var release in document.RootElement.EnumerateArray())
         {
-            UseShellExecute = true
-        });
+            var isPrerelease = release.TryGetProperty("prerelease", out var prerelease)
+                && prerelease.GetBoolean();
+            if (!isPrerelease)
+                continue;
+
+            var tagName = release.GetProperty("tag_name").GetString() ?? "";
+            return (release.Clone(), tagName);
+        }
+
+        return null;
+    }
+
+    private static bool TryGetInstallerAsset(JsonElement release, out string downloadUrl, out string fileName)
+    {
+        downloadUrl = "";
+        fileName = "";
+
+        if (!release.TryGetProperty("assets", out var assets))
+            return false;
+
+        foreach (var asset in assets.EnumerateArray())
+        {
+            var name = asset.GetProperty("name").GetString() ?? "";
+            if (!name.EndsWith(UpdateConfig.InstallerAssetSuffix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (!name.StartsWith(UpdateConfig.InstallerAssetPrefix, StringComparison.OrdinalIgnoreCase)
+                && !name.Contains("Recordings Transfer Setup", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            downloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
+            fileName = name;
+            return !string.IsNullOrEmpty(downloadUrl);
+        }
+
+        return false;
     }
 
     private static HttpClient CreateClient()
     {
-        var client = new HttpClient
-        {
-            Timeout = TimeSpan.FromMinutes(10)
-        };
+        var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
         client.DefaultRequestHeaders.UserAgent.Add(
             new ProductInfoHeaderValue("ODBC-Recordings-Transfer", GetCurrentVersion().ToString()));
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

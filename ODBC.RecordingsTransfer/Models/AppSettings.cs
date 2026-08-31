@@ -10,5 +10,8 @@ public class AppSettings
     public bool VerifyTransfer { get; set; } = false;
     public bool VerifyRemux { get; set; } = false;
     public bool AutoRunOnStartup { get; set; } = false;
+    public int AutoRunDelaySeconds { get; set; } = 5;
     public bool CheckForUpdatesOnStartup { get; set; } = true;
+    public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Stable;
+    public bool SkipDestinationYearWarning { get; set; } = false;
 }

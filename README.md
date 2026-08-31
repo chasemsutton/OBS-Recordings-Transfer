@@ -32,6 +32,15 @@ git push origin v2.0.1
 
 GitHub Actions builds the installer and publishes it to [Releases](https://github.com/chasemsutton/ODBC-Recordings-Transfer/releases). Installed copies check for updates automatically (or via **Check for Updates** in the app).
 
+**Update channels:**
+- **Stable** — latest non-prerelease release (`/releases/latest`)
+- **Beta** — latest GitHub prerelease (mark a release as prerelease when publishing betas)
+
+```bat
+git tag v2.1.0-beta.1
+git push origin v2.1.0-beta.1
+```
+
 ## Config
 
 Settings are stored in `config.txt` next to the executable.

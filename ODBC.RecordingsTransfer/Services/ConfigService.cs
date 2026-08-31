@@ -34,7 +34,14 @@ public class ConfigService
         settings.VerifyTransfer = bool.Parse(ReadValue(lines, "Verify Transfer", settings.VerifyTransfer.ToString()));
         settings.VerifyRemux = bool.Parse(ReadValue(lines, "Verify Remux", settings.VerifyRemux.ToString()));
         settings.AutoRunOnStartup = bool.Parse(ReadValue(lines, "Begin Transfer On Startup", settings.AutoRunOnStartup.ToString()));
+        settings.AutoRunDelaySeconds = ParseDelay(ReadValue(lines, "Auto Start Delay (seconds)", settings.AutoRunDelaySeconds.ToString()));
         settings.CheckForUpdatesOnStartup = bool.Parse(ReadValue(lines, "Check For Updates On Startup", settings.CheckForUpdatesOnStartup.ToString()));
+        settings.UpdateChannel = Enum.TryParse<UpdateChannel>(
+            ReadValue(lines, "Update Channel", settings.UpdateChannel.ToString()), true, out var channel)
+            ? channel
+            : UpdateChannel.Stable;
+        settings.SkipDestinationYearWarning = bool.Parse(
+            ReadValue(lines, "Skip Destination Year Warning", settings.SkipDestinationYearWarning.ToString()));
 
         return settings;
     }
@@ -51,10 +58,18 @@ public class ConfigService
             $"Verify Transfer: \"{settings.VerifyTransfer}\"",
             $"Verify Remux: \"{settings.VerifyRemux}\"",
             $"Begin Transfer On Startup: \"{settings.AutoRunOnStartup}\"",
-            $"Check For Updates On Startup: \"{settings.CheckForUpdatesOnStartup}\""
+            $"Auto Start Delay (seconds): \"{settings.AutoRunDelaySeconds}\"",
+            $"Check For Updates On Startup: \"{settings.CheckForUpdatesOnStartup}\"",
+            $"Update Channel: \"{settings.UpdateChannel}\"",
+            $"Skip Destination Year Warning: \"{settings.SkipDestinationYearWarning}\""
         };
 
         File.WriteAllLines(_configPath, lines);
+    }
+
+    private static int ParseDelay(string value)
+    {
+        return int.TryParse(value, out var seconds) && seconds >= 0 ? seconds : 5;
     }
 
     private static string ReadValue(List<string> lines, string key, string defaultValue)

@@ -16,7 +16,7 @@ public partial class UpdateWindow : Window
         _updateService = updateService;
         _update = update;
 
-        VersionText.Text = $"Version {_update.Version} is available (you have {updateService.CurrentVersion}).";
+        VersionText.Text = $"Version {_update.Version} is available on the {_update.Channel} channel (you have {updateService.CurrentVersion}).";
         ReleaseNotesText.Text = string.IsNullOrWhiteSpace(_update.ReleaseNotes)
             ? "No release notes provided."
             : _update.ReleaseNotes;

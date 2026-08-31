@@ -10,7 +10,7 @@ internal static class Program
 {
     private const string AppName = "ODBC Recordings Transfer";
     private const string ExeName = "ODBC Recordings Transfer.exe";
-    private const string Version = "2.0.3";
+    private const string Version = "2.1.0";
     private const string Publisher = "Open Door Baptist Church";
     private const string UninstallKeyName = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8F4E2A91-6C3D-4B7E-9F1A-2D5E8C0B4A73}";
 
@@ -218,7 +218,10 @@ internal static class Program
             "Verify Transfer: \"False\"\r\n" +
             "Verify Remux: \"False\"\r\n" +
             "Begin Transfer On Startup: \"False\"\r\n" +
-            "Check For Updates On Startup: \"True\"\r\n");
+            "Check For Updates On Startup: \"True\"\r\n" +
+            "Update Channel: \"Stable\"\r\n" +
+            "Skip Destination Year Warning: \"False\"\r\n" +
+            "Auto Start Delay (seconds): \"5\"\r\n");
     }
 
     private static void RegisterUninstall(string installDir)
