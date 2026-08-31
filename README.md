@@ -39,3 +39,17 @@ Settings are stored in `config.txt` next to the executable.
 ## Install
 
 Run `installer-output\ODBC Recordings Transfer Setup.exe` (or download the latest installer from GitHub Releases).
+
+### Windows Application Control blocked the app?
+
+If you see **"An Application Control policy has blocked this file"**, the install usually still succeeded. The PC is blocking unsigned executables (common on church/media workstations with AppLocker, WDAC, or Smart App Control).
+
+**On the media PC right now:** check the Start Menu for **ODBC Recordings Transfer** — the app may already be at `C:\Program Files\ODBC Recordings Transfer\`.
+
+**To allow it permanently**, your IT admin needs one of:
+
+1. **Whitelist the install path** — allow `C:\Program Files\ODBC Recordings Transfer\ODBC Recordings Transfer.exe`
+2. **Code signing** — sign the exe with an organization code-signing certificate (best long-term fix)
+3. **Smart App Control** — if enabled on Windows 11, it blocks unsigned apps until IT adds an exception
+
+The installer itself may also be blocked until IT allows it or the app is signed.
