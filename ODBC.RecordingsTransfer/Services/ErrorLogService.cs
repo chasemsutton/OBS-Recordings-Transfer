@@ -4,14 +4,13 @@ namespace ODBC.RecordingsTransfer.Services;
 
 public static class ErrorLogService
 {
-    private static readonly string ErrorPath = Path.Combine(AppContext.BaseDirectory, "programError.txt");
-
     public static void Write(Exception ex)
     {
         try
         {
+            AppPaths.EnsureAppDataDirectory();
             var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} -------------------------------------------{Environment.NewLine}{ex}{Environment.NewLine}";
-            File.AppendAllText(ErrorPath, line);
+            File.AppendAllText(AppPaths.ErrorFile, line);
         }
         catch
         {
@@ -19,5 +18,5 @@ public static class ErrorLogService
         }
     }
 
-    public static string ErrorFilePath => ErrorPath;
+    public static string ErrorFilePath => AppPaths.ErrorFile;
 }

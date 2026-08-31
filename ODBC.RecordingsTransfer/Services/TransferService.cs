@@ -440,7 +440,7 @@ public class TransferService
 
         report($"Validating remux: {Path.GetFileName(sourceFile)}");
 
-        var errorLog = Path.Combine(AppContext.BaseDirectory, "error.log");
+        var errorLog = AppPaths.FfmpegErrorLog;
         var startInfo = new ProcessStartInfo
         {
             FileName = ffmpegPath,

@@ -11,8 +11,10 @@ public class LoggingService
 
     public LoggingService(string? logPath = null)
     {
-        _logPath = logPath ?? Path.Combine(AppContext.BaseDirectory, "logfile.txt");
+        _logPath = logPath ?? AppPaths.LogFile;
     }
+
+    public string LogFilePath => _logPath;
 
     public event Action<string>? LogMessage;
 
@@ -23,6 +25,7 @@ public class LoggingService
 
     public void WriteResult(TransferResult result)
     {
+        AppPaths.EnsureAppDataDirectory();
         using var log = File.Exists(_logPath) ? File.AppendText(_logPath) : new StreamWriter(_logPath);
 
         log.WriteLine($"{DateTime.Now} -------------------------------------------");

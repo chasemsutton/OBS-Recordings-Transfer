@@ -12,7 +12,8 @@ public class ConfigService
 
     public ConfigService(string? configPath = null)
     {
-        _configPath = configPath ?? Path.Combine(AppContext.BaseDirectory, "config.txt");
+        AppPaths.MigrateLegacyConfigIfNeeded();
+        _configPath = configPath ?? AppPaths.ConfigFile;
     }
 
     public AppSettings Load()
@@ -48,6 +49,7 @@ public class ConfigService
 
     public void Save(AppSettings settings)
     {
+        AppPaths.EnsureAppDataDirectory();
         var lines = new[]
         {
             $"Source Path: \"{settings.SourcePath}\"",
@@ -66,6 +68,8 @@ public class ConfigService
 
         File.WriteAllLines(_configPath, lines);
     }
+
+    public string ConfigFilePath => _configPath;
 
     private static int ParseDelay(string value)
     {

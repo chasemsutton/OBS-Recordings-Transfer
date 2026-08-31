@@ -592,7 +592,7 @@ public class MainViewModel : ViewModelBase
 
     private static void OpenLogFolder()
     {
-        var folder = AppContext.BaseDirectory;
-        Process.Start(new ProcessStartInfo("explorer.exe", folder) { UseShellExecute = true });
+        AppPaths.EnsureAppDataDirectory();
+        Process.Start(new ProcessStartInfo("explorer.exe", AppPaths.AppDataDirectory) { UseShellExecute = true });
     }
 }
