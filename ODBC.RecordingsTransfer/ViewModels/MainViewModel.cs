@@ -37,6 +37,7 @@ public class MainViewModel : ViewModelBase
     private readonly TransferService _transferService;
     private readonly UpdateService _updateService;
     private CancellationTokenSource? _autoCloseCts;
+    private CancellationTokenSource? _autoStartCts;
 
     private string _sourcePath = "";
     private string _destinationPath = "";
@@ -62,6 +63,9 @@ public class MainViewModel : ViewModelBase
     private CancellationTokenSource? _autoSaveCts;
     private bool _isAutoCloseCountdownActive;
     private bool _showSettingsPanel = true;
+    private bool _isAutoStartCountdownActive;
+    private string _autoStartCountdownText = "";
+    private double _autoStartCountdownProgress;
 
     public MainViewModel()
     {
@@ -86,7 +90,16 @@ public class MainViewModel : ViewModelBase
 
         LoadSettings();
 
-        RunTransferCommand = new RelayCommand(_ => _ = RunTransferAsync(), _ => !IsRunning);
+        RunTransferCommand = new RelayCommand(_ => _ = RunTransferAsync(), _ => !IsRunning && !IsAutoStartCountdownActive);
+        TransferPrimaryCommand = new RelayCommand(
+            _ =>
+            {
+                if (IsAutoStartCountdownActive)
+                    CancelAutoStart();
+                else
+                    _ = RunTransferAsync();
+            },
+            _ => !IsRunning);
         BrowseSourceCommand = new RelayCommand(_ => BrowseFolder(path => SourcePath = path));
         BrowseDestinationCommand = new RelayCommand(_ => BrowseFolder(path => DestinationPath = path));
         ClearLogCommand = new RelayCommand(_ => LogText = "");
@@ -217,6 +230,33 @@ public class MainViewModel : ViewModelBase
 
     public string SettingsToggleButtonText => ShowSettingsPanel ? "Hide Settings" : "Show Settings";
 
+    public bool IsAutoStartCountdownActive
+    {
+        get => _isAutoStartCountdownActive;
+        set
+        {
+            if (SetProperty(ref _isAutoStartCountdownActive, value))
+            {
+                OnPropertyChanged(nameof(TransferPrimaryButtonText));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+    }
+
+    public string AutoStartCountdownText
+    {
+        get => _autoStartCountdownText;
+        set => SetProperty(ref _autoStartCountdownText, value);
+    }
+
+    public double AutoStartCountdownProgress
+    {
+        get => _autoStartCountdownProgress;
+        set => SetProperty(ref _autoStartCountdownProgress, value);
+    }
+
+    public string TransferPrimaryButtonText => IsAutoStartCountdownActive ? "Cancel" : "Run Transfer";
+
     public string LogText
     {
         get => _logText;
@@ -248,6 +288,7 @@ public class MainViewModel : ViewModelBase
     }
 
     public ICommand RunTransferCommand { get; }
+    public ICommand TransferPrimaryCommand { get; }
     public ICommand BrowseSourceCommand { get; }
     public ICommand BrowseDestinationCommand { get; }
     public ICommand ClearLogCommand { get; }
@@ -266,16 +307,79 @@ public class MainViewModel : ViewModelBase
 
         if (AutoRunOnStartup)
         {
+            BuildTransferQueue(logToActivity: true);
+
             var delay = ParseAutoRunDelay();
             if (delay > 0)
             {
-                StatusText = $"Auto-starting transfer in {delay} second{(delay == 1 ? "" : "s")}...";
-                AppendLog($"Auto-start transfer scheduled in {delay} second{(delay == 1 ? "" : "s")}.");
-                await Task.Delay(TimeSpan.FromSeconds(delay));
+                if (!await StartAutoStartCountdownAsync(delay))
+                    return;
             }
 
             await RunTransferAsync();
         }
+    }
+
+    private List<TransferActionPlan> BuildTransferQueue(bool logToActivity)
+    {
+        var plan = _transferService.BuildPlan(ToSettings());
+        TransferItems.Clear();
+
+        foreach (var planItem in plan)
+        {
+            TransferItems.Add(new TransferActionViewModel(planItem));
+            if (logToActivity)
+                AppendLog($"Planned: {planItem.Description}");
+        }
+
+        if (plan.Count == 0 && logToActivity)
+            AppendLog("No file actions planned.");
+
+        return plan;
+    }
+
+    private async Task<bool> StartAutoStartCountdownAsync(int totalSeconds)
+    {
+        CancelAutoStart();
+        _autoStartCts = new CancellationTokenSource();
+        var token = _autoStartCts.Token;
+        IsAutoStartCountdownActive = true;
+        AutoStartCountdownProgress = 0;
+
+        try
+        {
+            for (var remaining = totalSeconds; remaining > 0; remaining--)
+            {
+                AutoStartCountdownText = $"Transfer starting in {remaining} second{(remaining == 1 ? "" : "s")}...";
+                StatusText = AutoStartCountdownText;
+                AutoStartCountdownProgress = (totalSeconds - remaining) / (double)totalSeconds;
+                await Task.Delay(1000, token);
+            }
+
+            AutoStartCountdownProgress = 1;
+            return true;
+        }
+        catch (TaskCanceledException)
+        {
+            StatusText = "Auto-start cancelled";
+            AppendLog("Auto-start transfer cancelled.");
+            return false;
+        }
+        finally
+        {
+            IsAutoStartCountdownActive = false;
+            AutoStartCountdownText = "";
+            AutoStartCountdownProgress = 0;
+        }
+    }
+
+    private void CancelAutoStart()
+    {
+        if (_autoStartCts == null)
+            return;
+
+        _autoStartCts.Cancel();
+        _autoStartCts = null;
     }
 
     private void LoadSettings()
@@ -495,26 +599,19 @@ public class MainViewModel : ViewModelBase
         }
 
         CancelAutoClose();
+        CancelAutoStart();
         IsRunning = true;
         StatusText = "Running transfer...";
         ResetCounts();
-        TransferItems.Clear();
 
         var settings = ToSettings();
         _configService.Save(settings);
 
-        var plan = _transferService.BuildPlan(settings);
+        AppendLog("Refreshing transfer plan before run...");
+        BuildTransferQueue(logToActivity: true);
         var itemLookup = new Dictionary<string, TransferActionViewModel>(StringComparer.OrdinalIgnoreCase);
-        foreach (var planItem in plan)
-        {
-            var vm = new TransferActionViewModel(planItem);
-            TransferItems.Add(vm);
-            itemLookup[planItem.FileName] = vm;
-            AppendLog($"Planned: {planItem.Description}");
-        }
-
-        if (plan.Count == 0)
-            AppendLog("No file actions planned.");
+        foreach (var item in TransferItems)
+            itemLookup[item.FileName] = item;
 
         var progress = new Progress<TransferProgressUpdate>(update =>
         {

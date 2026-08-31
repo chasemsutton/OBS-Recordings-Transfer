@@ -112,11 +112,31 @@
         <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="12" Margin="0,0,0,12"
                 BorderBrush="#E0E0E0" BorderThickness="1">
             <StackPanel Orientation="Horizontal">
-                <Button Content="Run Transfer" Command="{Binding RunTransferCommand}" FontWeight="SemiBold" Padding="20,6"/>
-                <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"/>
-                <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"/>
+                <StackPanel Margin="0,0,8,0" VerticalAlignment="Bottom">
+                    <StackPanel Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"
+                                Margin="0,0,0,6" MinWidth="200">
+                        <TextBlock Text="{Binding AutoStartCountdownText}" FontSize="12" Foreground="#666666" Margin="0,0,0,4"/>
+                        <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding AutoStartCountdownProgress}"/>
+                    </StackPanel>
+                    <Button Content="{Binding TransferPrimaryButtonText}"
+                            Command="{Binding TransferPrimaryCommand}"
+                            FontWeight="SemiBold" Padding="20,6" Foreground="White" BorderThickness="0" Cursor="Hand">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="#2B579A"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsAutoStartCountdownActive}" Value="True">
+                                        <Setter Property="Background" Value="#B33A3A"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+                <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5" VerticalAlignment="Bottom"/>
+                <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555" VerticalAlignment="Bottom"/>
                 <Button Content="Open Log Folder" Command="{Binding OpenLogFolderCommand}" Background="#666666"
-                        Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}"/>
+                        Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}" VerticalAlignment="Bottom"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
                     <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                                FontStyle="Italic" Foreground="#666666"/>
