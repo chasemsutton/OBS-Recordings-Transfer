@@ -10,14 +10,18 @@
     <ApplicationIcon>transfer_icon.ico</ApplicationIcon>
     <AssemblyName>ODBC Recordings Transfer</AssemblyName>
     <RootNamespace>ODBC.RecordingsTransfer</RootNamespace>
-    <Version>2.0.0</Version>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
-    <InformationalVersion>2.0.0</InformationalVersion>
+    <Version>2.0.1</Version>
+    <AssemblyVersion>2.0.1.0</AssemblyVersion>
+    <FileVersion>2.0.1.0</FileVersion>
+    <InformationalVersion>2.0.1</InformationalVersion>
     <RepositoryUrl>https://github.com/chasemsutton/ODBC-Recordings-Transfer</RepositoryUrl>
     <Company>Open Door Baptist Church</Company>
     <Product>ODBC Recordings Transfer</Product>
     <Description>Transfer MP4 recordings and clean up old MKV files</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="transfer_icon.ico" />
+  </ItemGroup>
 
 </Project>

@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using System.Windows.Media.Imaging;
 using ODBC.RecordingsTransfer.Services;
 
 namespace ODBC.RecordingsTransfer;

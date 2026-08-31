@@ -1,5 +1,7 @@
-﻿using System.Windows;
+﻿using System;
+using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using ODBC.RecordingsTransfer.ViewModels;
 
 namespace ODBC.RecordingsTransfer;
@@ -11,9 +13,22 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        TrySetWindowIcon();
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
         _viewModel.RequestClose += () => Dispatcher.Invoke(Close);
+    }
+
+    private void TrySetWindowIcon()
+    {
+        try
+        {
+            Icon = new BitmapImage(new Uri("pack://application:,,,/transfer_icon.ico", UriKind.Absolute));
+        }
+        catch
+        {
+            // Icon is optional; keep the app usable if the resource is missing.
+        }
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
