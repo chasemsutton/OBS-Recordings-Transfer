@@ -21,8 +21,25 @@
 
         <DockPanel Grid.Row="2" x:Name="VersionPickerPanel" Margin="0,0,0,12" Visibility="Collapsed">
             <TextBlock Text="Version" VerticalAlignment="Center" Margin="0,0,12,0"/>
-            <ComboBox x:Name="VersionCombo" DisplayMemberPath="DisplayLabel"
-                      SelectionChanged="VersionCombo_SelectionChanged"/>
+            <ComboBox x:Name="VersionCombo" SelectionChanged="VersionCombo_SelectionChanged">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding DisplayLabel}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="#333333"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter Property="Foreground" Value="#2B7A2B"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
         </DockPanel>
 
         <Border Grid.Row="3" Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="6" Padding="12">

@@ -1203,8 +1203,11 @@ public class MainViewModel : ViewModelBase
         switch (update.Kind)
         {
             case TransferProgressUpdateKind.Start:
+                item.ActionType = update.ActionType;
                 item.Status = TransferActionStatus.InProgress;
                 item.Progress = 0;
+                if (!string.IsNullOrWhiteSpace(update.Message))
+                    item.Label = update.Message;
                 item.ProgressText = update.TotalBytes > 0
                     ? FileSizeFormatter.FormatProgress(0, update.TotalBytes)
                     : update.Message ?? "";
@@ -1213,6 +1216,7 @@ public class MainViewModel : ViewModelBase
                 break;
 
             case TransferProgressUpdateKind.Progress:
+                item.ActionType = update.ActionType;
                 item.Status = TransferActionStatus.InProgress;
                 item.Progress = update.Progress;
                 if (!string.IsNullOrWhiteSpace(update.Message))

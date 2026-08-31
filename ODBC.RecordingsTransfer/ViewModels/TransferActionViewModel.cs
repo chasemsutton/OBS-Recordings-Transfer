@@ -5,6 +5,7 @@ namespace ODBC.RecordingsTransfer.ViewModels;
 public class TransferActionViewModel : ViewModelBase
 {
     private TransferActionStatus _status = TransferActionStatus.Pending;
+    private TransferActionType _actionType;
     private double _progress;
     private string _progressText = "";
     private string _label;
@@ -13,12 +14,17 @@ public class TransferActionViewModel : ViewModelBase
     public TransferActionViewModel(TransferActionPlan plan)
     {
         FileName = plan.FileName;
-        ActionType = plan.ActionType;
+        _actionType = plan.ActionType;
         _label = plan.Description;
     }
 
     public string FileName { get; }
-    public TransferActionType ActionType { get; }
+
+    public TransferActionType ActionType
+    {
+        get => _actionType;
+        set => SetProperty(ref _actionType, value);
+    }
 
     public string Label
     {

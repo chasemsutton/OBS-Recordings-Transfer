@@ -25,15 +25,12 @@ public class UpdateInfo
     {
         get
         {
+            var label = $"v{Version}";
             if (IsCurrent)
-                return $"v{Version} (current)";
-            if (IsNewer)
-                return MinUpdateFrom != null
-                    ? $"v{Version} (newer, from v{MinUpdateFrom}+)"
-                    : $"v{Version} (newer)";
-            if (IsOlder)
-                return $"v{Version} (older)";
-            return $"v{Version}";
+                label += " (current)";
+            if (Channel == UpdateChannel.Beta)
+                label += " (beta)";
+            return label;
         }
     }
 }
