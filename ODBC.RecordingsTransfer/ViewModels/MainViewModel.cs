@@ -294,9 +294,24 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            var update = await _updateService.CheckForUpdateAsync(channel);
+            var result = await _updateService.CheckForUpdateAsync(channel);
 
-            if (update == null)
+            if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+            {
+                StatusText = "Update check failed";
+                AppendLog($"Update check failed: {result.ErrorMessage}");
+                if (manual)
+                {
+                    System.Windows.MessageBox.Show(
+                        $"Could not check for updates:\n\n{result.ErrorMessage}",
+                        "Update Check Failed",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                return;
+            }
+
+            if (!result.UpdateAvailable || result.Update == null)
             {
                 if (manual)
                 {
@@ -310,6 +325,7 @@ public class MainViewModel : ViewModelBase
                 return;
             }
 
+            var update = result.Update;
             StatusText = $"Update available: v{update.Version} ({channel})";
             AppendLog($"Update available on {channel} channel: v{update.Version}");
 
@@ -348,12 +364,7 @@ public class MainViewModel : ViewModelBase
         if (SkipDestinationYearWarning)
             return true;
 
-        var trimmed = DestinationPath.TrimEnd('\\', '/');
-        if (trimmed.Length < 4)
-            return true;
-
-        var suffix = trimmed[^4..];
-        if (!suffix.All(char.IsDigit) || !int.TryParse(suffix, out var folderYear))
+        if (!DestinationPathValidator.TryGetFolderYear(DestinationPath, out var folderYear))
             return true;
 
         var currentYear = DateTime.Now.Year;
@@ -366,14 +377,23 @@ public class MainViewModel : ViewModelBase
             Owner = owner
         };
 
-        var confirmed = dialog.ShowDialog() == true;
+        if (dialog.ShowDialog() != true)
+            return false;
+
         if (dialog.DontAskAgain)
         {
             SkipDestinationYearWarning = true;
             _configService.Save(ToSettings());
         }
 
-        return confirmed;
+        if (dialog.Result == DestinationConfirmResult.UpdateYear)
+        {
+            DestinationPath = DestinationPathValidator.UpdateYearInPath(DestinationPath, currentYear);
+            _configService.Save(ToSettings());
+            AppendLog($"Destination path year updated to {currentYear}: {DestinationPath}");
+        }
+
+        return dialog.Result != DestinationConfirmResult.Cancel;
     }
 
     private async Task RunTransferAsync()

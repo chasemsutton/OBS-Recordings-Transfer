@@ -4,17 +4,37 @@ public static class DestinationPathValidator
 {
     public static bool ShouldWarnAboutYear(string destinationPath, int currentYear)
     {
+        if (!TryGetFolderYear(destinationPath, out var folderYear))
+            return false;
+
+        return folderYear != currentYear;
+    }
+
+    public static bool TryGetFolderYear(string destinationPath, out int folderYear)
+    {
+        folderYear = 0;
         var trimmed = destinationPath.TrimEnd('\\', '/');
         if (trimmed.Length < 4)
             return false;
 
         var suffix = trimmed[^4..];
-        if (!suffix.All(char.IsDigit))
-            return false;
+        return suffix.All(char.IsDigit) && int.TryParse(suffix, out folderYear);
+    }
 
-        if (!int.TryParse(suffix, out var folderYear))
-            return false;
+    public static string UpdateYearInPath(string destinationPath, int year)
+    {
+        var trailing = "";
+        var path = destinationPath;
 
-        return folderYear != currentYear;
+        while (path.Length > 0 && (path[^1] == '\\' || path[^1] == '/'))
+        {
+            trailing = path[^1] + trailing;
+            path = path[..^1];
+        }
+
+        if (path.Length < 4 || !path[^4..].All(char.IsDigit))
+            return destinationPath;
+
+        return path[..^4] + year + trailing;
     }
 }

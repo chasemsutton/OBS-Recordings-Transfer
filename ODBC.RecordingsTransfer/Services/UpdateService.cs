@@ -14,38 +14,49 @@ public class UpdateService
 
     public Version CurrentVersion { get; } = GetCurrentVersion();
 
-    public async Task<UpdateInfo?> CheckForUpdateAsync(
+    public async Task<UpdateCheckResult> CheckForUpdateAsync(
         UpdateChannel channel = UpdateChannel.Stable,
         CancellationToken cancellationToken = default)
     {
-        var release = channel == UpdateChannel.Stable
-            ? await GetLatestStableReleaseAsync(cancellationToken)
-            : await GetLatestBetaReleaseAsync(cancellationToken);
-
-        if (release == null)
-            return null;
-
-        var tagName = release.Value.TagName;
-        var version = ParseVersion(tagName);
-        if (version <= CurrentVersion)
-            return null;
-
-        if (!TryGetInstallerAsset(release.Value.Root, out var downloadUrl, out var fileName))
-            return null;
-
-        var notes = release.Value.Root.TryGetProperty("body", out var body)
-            ? body.GetString() ?? ""
-            : "";
-
-        return new UpdateInfo
+        try
         {
-            Version = version,
-            TagName = tagName,
-            ReleaseNotes = notes.Trim(),
-            DownloadUrl = downloadUrl,
-            FileName = fileName,
-            Channel = channel
-        };
+            var release = channel == UpdateChannel.Stable
+                ? await GetLatestStableReleaseAsync(cancellationToken)
+                : await GetLatestBetaReleaseAsync(cancellationToken);
+
+            if (release == null)
+                return UpdateCheckResult.Failed($"No {channel.ToString().ToLower()} release was found on GitHub.");
+
+            var tagName = release.Value.TagName;
+            var version = ParseVersion(tagName);
+            if (version <= CurrentVersion)
+                return UpdateCheckResult.UpToDate();
+
+            if (!TryGetInstallerAsset(release.Value.Root, out var downloadUrl, out var fileName))
+            {
+                return UpdateCheckResult.Failed(
+                    $"Version {version} is available, but no installer file was found in the GitHub release. " +
+                    "Expected a file starting with \"ODBC-Recordings-Transfer-Setup\".");
+            }
+
+            var notes = release.Value.Root.TryGetProperty("body", out var body)
+                ? body.GetString() ?? ""
+                : "";
+
+            return UpdateCheckResult.Found(new UpdateInfo
+            {
+                Version = version,
+                TagName = tagName,
+                ReleaseNotes = notes.Trim(),
+                DownloadUrl = downloadUrl,
+                FileName = fileName,
+                Channel = channel
+            });
+        }
+        catch (Exception ex)
+        {
+            return UpdateCheckResult.Failed(ex.Message);
+        }
     }
 
     public async Task<string> DownloadInstallerAsync(
@@ -136,11 +147,7 @@ public class UpdateService
         foreach (var asset in assets.EnumerateArray())
         {
             var name = asset.GetProperty("name").GetString() ?? "";
-            if (!name.EndsWith(UpdateConfig.InstallerAssetSuffix, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (!name.StartsWith(UpdateConfig.InstallerAssetPrefix, StringComparison.OrdinalIgnoreCase)
-                && !name.Contains("Recordings Transfer Setup", StringComparison.OrdinalIgnoreCase))
+            if (!IsInstallerAsset(name))
                 continue;
 
             downloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
@@ -149,6 +156,18 @@ public class UpdateService
         }
 
         return false;
+    }
+
+    private static bool IsInstallerAsset(string name)
+    {
+        if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (name.StartsWith(UpdateConfig.InstallerAssetPrefix, StringComparison.OrdinalIgnoreCase)
+            && name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return name.Contains("Recordings Transfer Setup", StringComparison.OrdinalIgnoreCase);
     }
 
     private static HttpClient CreateClient()
