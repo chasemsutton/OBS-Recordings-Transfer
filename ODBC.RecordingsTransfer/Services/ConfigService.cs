@@ -43,6 +43,8 @@ public class ConfigService
             : UpdateChannel.Stable;
         settings.SkipDestinationYearWarning = bool.Parse(
             ReadValue(lines, "Skip Destination Year Warning", settings.SkipDestinationYearWarning.ToString()));
+        settings.ShowSettingsPanel = bool.Parse(
+            ReadValue(lines, "Show Settings Panel", settings.ShowSettingsPanel.ToString()));
 
         return settings;
     }
@@ -63,7 +65,8 @@ public class ConfigService
             $"Auto Start Delay (seconds): \"{settings.AutoRunDelaySeconds}\"",
             $"Check For Updates On Startup: \"{settings.CheckForUpdatesOnStartup}\"",
             $"Update Channel: \"{settings.UpdateChannel}\"",
-            $"Skip Destination Year Warning: \"{settings.SkipDestinationYearWarning}\""
+            $"Skip Destination Year Warning: \"{settings.SkipDestinationYearWarning}\"",
+            $"Show Settings Panel: \"{settings.ShowSettingsPanel}\""
         };
 
         File.WriteAllLines(_configPath, lines);

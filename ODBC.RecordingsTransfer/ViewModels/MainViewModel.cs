@@ -28,7 +28,8 @@ public class MainViewModel : ViewModelBase
         nameof(AutoRunDelayText),
         nameof(CheckForUpdatesOnStartup),
         nameof(UpdateChannelName),
-        nameof(SkipDestinationYearWarning)
+        nameof(SkipDestinationYearWarning),
+        nameof(ShowSettingsPanel)
     };
 
     private readonly ConfigService _configService;
@@ -60,6 +61,7 @@ public class MainViewModel : ViewModelBase
     private bool _isLoadingSettings;
     private CancellationTokenSource? _autoSaveCts;
     private bool _isAutoCloseCountdownActive;
+    private bool _showSettingsPanel = true;
 
     public MainViewModel()
     {
@@ -91,7 +93,10 @@ public class MainViewModel : ViewModelBase
         OpenLogFolderCommand = new RelayCommand(_ => OpenLogFolder());
         CancelAutoCloseCommand = new RelayCommand(_ => CancelAutoClose());
         CheckForUpdatesCommand = new RelayCommand(_ => _ = CheckForUpdatesAsync(manual: true), _ => !IsCheckingForUpdates);
+        ToggleSettingsPanelCommand = new RelayCommand(_ => ShowSettingsPanel = !ShowSettingsPanel);
     }
+
+    public event Action<bool>? SettingsPanelVisibilityChanged;
 
     public string AppVersion { get; }
     public ObservableCollection<TransferActionViewModel> TransferItems { get; }
@@ -197,6 +202,21 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _isAutoCloseCountdownActive, value);
     }
 
+    public bool ShowSettingsPanel
+    {
+        get => _showSettingsPanel;
+        set
+        {
+            if (SetProperty(ref _showSettingsPanel, value))
+            {
+                OnPropertyChanged(nameof(SettingsToggleButtonText));
+                SettingsPanelVisibilityChanged?.Invoke(value);
+            }
+        }
+    }
+
+    public string SettingsToggleButtonText => ShowSettingsPanel ? "Hide Settings" : "Show Settings";
+
     public string LogText
     {
         get => _logText;
@@ -234,6 +254,7 @@ public class MainViewModel : ViewModelBase
     public ICommand OpenLogFolderCommand { get; }
     public ICommand CancelAutoCloseCommand { get; }
     public ICommand CheckForUpdatesCommand { get; }
+    public ICommand ToggleSettingsPanelCommand { get; }
 
     public async Task InitializeAsync()
     {
@@ -275,6 +296,7 @@ public class MainViewModel : ViewModelBase
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
             UpdateChannelName = settings.UpdateChannel.ToString();
             SkipDestinationYearWarning = settings.SkipDestinationYearWarning;
+            ShowSettingsPanel = settings.ShowSettingsPanel;
         }
         finally
         {
@@ -337,7 +359,8 @@ public class MainViewModel : ViewModelBase
         AutoRunDelaySeconds = ParseAutoRunDelay(),
         CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
         UpdateChannel = ParseUpdateChannel(),
-        SkipDestinationYearWarning = SkipDestinationYearWarning
+        SkipDestinationYearWarning = SkipDestinationYearWarning,
+        ShowSettingsPanel = ShowSettingsPanel
     };
 
     private int ParseAutoRunDelay()

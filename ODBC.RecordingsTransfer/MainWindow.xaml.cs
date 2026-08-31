@@ -7,6 +7,15 @@ namespace ODBC.RecordingsTransfer;
 
 public partial class MainWindow : Window
 {
+    private const double ExpandedHeight = 760;
+    private const double ExpandedWidth = 1040;
+    private const double ExpandedMinHeight = 640;
+    private const double ExpandedMinWidth = 900;
+    private const double CompactHeight = 420;
+    private const double CompactWidth = 480;
+    private const double CompactMinHeight = 280;
+    private const double CompactMinWidth = 400;
+
     private readonly MainViewModel _viewModel;
 
     public MainWindow()
@@ -16,6 +25,8 @@ public partial class MainWindow : Window
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
         _viewModel.RequestClose += () => Dispatcher.Invoke(Close);
+        _viewModel.SettingsPanelVisibilityChanged += ApplyLayoutForSettingsPanel;
+        ApplyLayoutForSettingsPanel(_viewModel.ShowSettingsPanel);
     }
 
     private void TrySetWindowIcon()
@@ -47,6 +58,24 @@ public partial class MainWindow : Window
 
             if (result != MessageBoxResult.Yes)
                 e.Cancel = true;
+        }
+    }
+
+    private void ApplyLayoutForSettingsPanel(bool showSettings)
+    {
+        if (showSettings)
+        {
+            MinHeight = ExpandedMinHeight;
+            MinWidth = ExpandedMinWidth;
+            Height = ExpandedHeight;
+            Width = ExpandedWidth;
+        }
+        else
+        {
+            MinHeight = CompactMinHeight;
+            MinWidth = CompactMinWidth;
+            Height = CompactHeight;
+            Width = CompactWidth;
         }
     }
 }

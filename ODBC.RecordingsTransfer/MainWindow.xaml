@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:ODBC.RecordingsTransfer.ViewModels"
         xmlns:models="clr-namespace:ODBC.RecordingsTransfer.Models"
+        xmlns:conv="clr-namespace:ODBC.RecordingsTransfer.Converters"
         mc:Ignorable="d"
         Title="ODBC Recordings Transfer"
         Height="760" Width="1040"
@@ -14,6 +15,7 @@
         Closing="Window_Closing">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
         <Style TargetType="Button">
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
@@ -96,24 +98,44 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="ODBC Recordings Transfer" FontSize="24" FontWeight="SemiBold" Foreground="#1A1A1A" Margin="0,0,0,4"/>
-            <TextBlock Text="Transfer MP4 recordings and clean up old MKV files" FontSize="14" Foreground="#666666"/>
+            <TextBlock Text="Transfer MP4 recordings and clean up old MKV files" FontSize="14" Foreground="#666666"
+                       Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 
-        <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="16" Margin="0,0,0,12"
+        <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="12" Margin="0,0,0,12"
                 BorderBrush="#E0E0E0" BorderThickness="1">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Run Transfer" Command="{Binding RunTransferCommand}" FontWeight="SemiBold" Padding="20,6"/>
+                <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"/>
+                <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"/>
+                <Button Content="Open Log Folder" Command="{Binding OpenLogFolderCommand}" Background="#666666"
+                        Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
+                    <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                               FontStyle="Italic" Foreground="#666666"/>
+                    <Button Content="Cancel" Command="{Binding CancelAutoCloseCommand}"
+                            Margin="8,0,0,0" Padding="10,4" Background="#666666"
+                            Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="16" Margin="0,0,0,12"
+                BorderBrush="#E0E0E0" BorderThickness="1"
+                Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -174,29 +196,17 @@
                     </StackPanel>
                 </StackPanel>
 
-                <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,4">
+                <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0">
                     <CheckBox Content="Don't warn when destination folder year doesn't match current year"
                               IsChecked="{Binding SkipDestinationYearWarning}"
                               ToolTip="When checked, the year mismatch prompt is skipped. Uncheck to show the warning again."/>
                 </StackPanel>
-
-                <StackPanel Grid.Row="6" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
-                    <Button Content="Run Transfer" Command="{Binding RunTransferCommand}" FontWeight="SemiBold" Padding="20,6"/>
-                    <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"/>
-                    <Button Content="Open Log Folder" Command="{Binding OpenLogFolderCommand}" Background="#666666"/>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                                   FontStyle="Italic" Foreground="#666666"/>
-                        <Button Content="Cancel" Command="{Binding CancelAutoCloseCommand}"
-                                Margin="8,0,0,0" Padding="10,4" Background="#666666"
-                                Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}"/>
-                    </StackPanel>
-                </StackPanel>
             </Grid>
         </Border>
 
-        <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="12,8" Margin="0,0,0,12"
-                BorderBrush="#E0E0E0" BorderThickness="1">
+        <Border Grid.Row="3" Background="White" CornerRadius="8" Padding="12,8" Margin="0,0,0,12"
+                BorderBrush="#E0E0E0" BorderThickness="1"
+                Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Detected: " FontWeight="SemiBold"/>
                 <TextBlock Text="{Binding DetectedCount}" Margin="0,0,24,0"/>
@@ -209,14 +219,15 @@
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="300"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="White" CornerRadius="8" Padding="12" Margin="0,0,8,0"
-                    BorderBrush="#E0E0E0" BorderThickness="1">
+                    BorderBrush="#E0E0E0" BorderThickness="1"
+                    Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -235,8 +246,21 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1" Background="White" CornerRadius="8" Padding="12"
+            <Border x:Name="TransferQueuePanel" Grid.Column="1" Background="White" CornerRadius="8" Padding="12"
                     BorderBrush="#E0E0E0" BorderThickness="1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Grid.Column" Value="1"/>
+                        <Setter Property="Grid.ColumnSpan" Value="1"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowSettingsPanel}" Value="False">
+                                <Setter Property="Grid.Column" Value="0"/>
+                                <Setter Property="Grid.ColumnSpan" Value="2"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -250,7 +274,8 @@
             </Border>
         </Grid>
 
-        <DockPanel Grid.Row="4">
+        <DockPanel Grid.Row="5"
+                   Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}">
             <TextBlock Text="{Binding AppVersion}" FontSize="11" Foreground="#AAAAAA" DockPanel.Dock="Left"/>
             <TextBlock Text="Open Door Baptist Church - Media Ministry" FontSize="11"
                        Foreground="#AAAAAA" HorizontalAlignment="Right" DockPanel.Dock="Right" Margin="0,8,0,0"/>

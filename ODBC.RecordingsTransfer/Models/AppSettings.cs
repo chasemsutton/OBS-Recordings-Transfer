@@ -14,4 +14,5 @@ public class AppSettings
     public bool CheckForUpdatesOnStartup { get; set; } = true;
     public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Stable;
     public bool SkipDestinationYearWarning { get; set; } = false;
+    public bool ShowSettingsPanel { get; set; } = true;
 }
