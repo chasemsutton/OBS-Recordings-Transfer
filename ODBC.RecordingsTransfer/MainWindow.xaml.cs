@@ -9,9 +9,12 @@ public partial class MainWindow : Window
 {
     private const double ExpandedHeight = 760;
     private const double ExpandedWidth = 1040;
-    private const double ExpandedMinHeight = 640;
-    private const double ExpandedMinWidth = 900;
-    private const double CompactColumnWidth = 440;
+    private const double ExpandedMinHeight = 520;
+    private const double ExpandedMinWidth = 720;
+    private const double CompactWidth = 480;
+    private const double CompactHeight = 520;
+    private const double CompactMinWidth = 360;
+    private const double CompactMinHeight = 420;
 
     private readonly MainViewModel _viewModel;
     private double _expandedHeight = ExpandedHeight;
@@ -44,9 +47,6 @@ public partial class MainWindow : Window
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        if (_isCompact)
-            FitCompactWindowToContent();
-
         await _viewModel.InitializeAsync();
     }
 
@@ -83,30 +83,44 @@ public partial class MainWindow : Window
         if (!_isCompact)
             CaptureExpandedLayout();
 
-        MinWidth = 1;
-        MinHeight = 1;
-
         if (WindowState != WindowState.Normal)
             WindowState = WindowState.Normal;
 
-        CompactColumn.Width = new GridLength(CompactColumnWidth);
-        SettingsColumn.Width = new GridLength(0);
-        MainBodyRow.Height = GridLength.Auto;
-        ActivityLogRow.Height = new GridLength(0);
+        SizeToContent = SizeToContent.Manual;
 
-        SizeToContent = SizeToContent.WidthAndHeight;
+        CompactColumn.Width = new GridLength(1, GridUnitType.Star);
+        CompactColumn.MinWidth = CompactMinWidth;
+        SettingsColumn.Width = new GridLength(0);
+        SettingsColumn.MinWidth = 0;
+        MainBodyRow.Height = new GridLength(1, GridUnitType.Star);
+        MainBodyRow.MinHeight = 0;
+        ActivityLogRow.Height = new GridLength(0);
+        ActivityLogRow.MinHeight = 0;
+
+        MinWidth = CompactMinWidth;
+        MinHeight = CompactMinHeight;
+
+        if (!_isCompact || Width < CompactMinWidth || Height < CompactMinHeight)
+        {
+            Width = CompactWidth;
+            Height = CompactHeight;
+        }
+
         _isCompact = true;
-        FitCompactWindowToContent();
     }
 
     private void ApplyExpandedLayout()
     {
         SizeToContent = SizeToContent.Manual;
 
-        CompactColumn.Width = new GridLength(CompactColumnWidth);
-        SettingsColumn.Width = new GridLength(1, GridUnitType.Star);
-        MainBodyRow.Height = GridLength.Auto;
+        CompactColumn.Width = new GridLength(1, GridUnitType.Star);
+        CompactColumn.MinWidth = 320;
+        SettingsColumn.Width = new GridLength(1.4, GridUnitType.Star);
+        SettingsColumn.MinWidth = 360;
+        MainBodyRow.Height = new GridLength(1, GridUnitType.Star);
+        MainBodyRow.MinHeight = 280;
         ActivityLogRow.Height = new GridLength(1, GridUnitType.Star);
+        ActivityLogRow.MinHeight = 120;
 
         MinWidth = ExpandedMinWidth;
         MinHeight = ExpandedMinHeight;
@@ -142,18 +156,5 @@ public partial class MainWindow : Window
 
         _expandedWidth = ExpandedWidth;
         _expandedHeight = ExpandedHeight;
-    }
-
-    private void FitCompactWindowToContent()
-    {
-        if (!IsLoaded)
-            return;
-
-        UpdateLayout();
-        if (ActualWidth <= 0 || ActualHeight <= 0)
-            return;
-
-        MinWidth = ActualWidth;
-        MinHeight = ActualHeight;
     }
 }

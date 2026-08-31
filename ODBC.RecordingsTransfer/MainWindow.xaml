@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         Title="ODBC Recordings Transfer"
         Height="760" Width="1040"
-        MinHeight="640" MinWidth="900"
+        MinHeight="420" MinWidth="360"
         Background="#F5F5F5"
         Loaded="Window_Loaded"
         Closing="Window_Closing">
@@ -98,18 +98,20 @@
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
-            <RowDefinition x:Name="MainBodyRow" Height="Auto"/>
-            <RowDefinition x:Name="ActivityLogRow" Height="*"/>
+            <RowDefinition x:Name="MainBodyRow" Height="*" MinHeight="280"/>
+            <RowDefinition x:Name="ActivityLogRow" Height="*" MinHeight="120"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="CompactColumn" Width="440"/>
-                <ColumnDefinition x:Name="SettingsColumn" Width="*"/>
+                <ColumnDefinition x:Name="CompactColumn" Width="*" MinWidth="320"/>
+                <ColumnDefinition x:Name="SettingsColumn" Width="1.4*" MinWidth="360"/>
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0" Width="440" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          VerticalAlignment="Stretch">
+            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Top">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -125,7 +127,7 @@
                 <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="8,12" Margin="0,0,0,12"
                         BorderBrush="#E0E0E0" BorderThickness="1">
                     <WrapPanel HorizontalAlignment="Center">
-                        <StackPanel Margin="0,0,8,0">
+                        <StackPanel Margin="0,0,8,0" HorizontalAlignment="Center">
                             <StackPanel Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"
                                         Margin="0,0,0,6" MinWidth="200">
                                 <TextBlock Text="{Binding AutoStartCountdownText}" FontSize="12" Foreground="#666666" Margin="0,0,0,4"/>
@@ -133,7 +135,8 @@
                             </StackPanel>
                             <Button Content="{Binding TransferPrimaryButtonText}"
                                     Command="{Binding TransferPrimaryCommand}"
-                                    FontWeight="SemiBold" Padding="20,6" Foreground="White" BorderThickness="0" Cursor="Hand">
+                                    FontWeight="SemiBold" Padding="20,6" Foreground="White" BorderThickness="0" Cursor="Hand"
+                                    HorizontalAlignment="Center">
                                 <Button.Style>
                                     <Style TargetType="Button">
                                         <Setter Property="Background" Value="#2B579A"/>
@@ -145,16 +148,18 @@
                                     </Style>
                                 </Button.Style>
                             </Button>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+                                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                                           FontStyle="Italic" Foreground="#666666" Margin="0"/>
+                                <Button Content="Cancel" Command="{Binding CancelAutoCloseCommand}"
+                                        Margin="8,0,0,0" Padding="10,4" Background="#666666"
+                                        Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
                         </StackPanel>
-                        <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"/>
-                        <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"/>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
-                            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                                       FontStyle="Italic" Foreground="#666666"/>
-                            <Button Content="Cancel" Command="{Binding CancelAutoCloseCommand}"
-                                    Margin="8,0,0,0" Padding="10,4" Background="#666666"
-                                    Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}"/>
-                        </StackPanel>
+                        <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"
+                                VerticalAlignment="Top"/>
+                        <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"
+                                VerticalAlignment="Top"/>
                     </WrapPanel>
                 </Border>
 
@@ -174,12 +179,16 @@
                     <StackPanel>
                         <TextBlock Text="Transfer Queue" FontWeight="SemiBold"
                                    HorizontalAlignment="Center" TextAlignment="Center" Margin="0,0,0,8"/>
-                        <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                        <!-- Fixed viewport for ~6 single-line items; scroll for the rest -->
+                        <ScrollViewer Height="180"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
                             <ItemsControl ItemsSource="{Binding TransferItems}"/>
                         </ScrollViewer>
                     </StackPanel>
                 </Border>
             </Grid>
+            </ScrollViewer>
 
             <Border Grid.Column="1" Background="White" CornerRadius="8" Padding="16" Margin="12,0,0,0"
                     BorderBrush="#E0E0E0" BorderThickness="1"
