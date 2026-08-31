@@ -147,7 +147,7 @@
                 <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="8,8" Margin="0,0,0,8"
                         BorderBrush="#E0E0E0" BorderThickness="1" MinWidth="0"
                         HorizontalAlignment="Stretch">
-                    <StackPanel HorizontalAlignment="Center">
+                    <StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
                             <RadioButton Content="None" GroupName="TransferMode"
                                          IsChecked="{Binding IsTransferModeNone}"
@@ -165,17 +165,18 @@
                                          ToolTip="Keep transferring MP4 files as they become remux-ready."/>
                         </StackPanel>
 
-                        <WrapPanel HorizontalAlignment="Center">
-                            <StackPanel Margin="0,0,8,0" HorizontalAlignment="Center">
+                        <!-- Button row is centered on its own; status sits full-width below so long labels cannot shift/wrap it. -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <StackPanel Width="128" Margin="0,0,8,0">
                                 <StackPanel Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"
-                                            Margin="0,0,0,6" MinWidth="200">
+                                            Margin="0,0,0,6">
                                     <TextBlock Text="{Binding AutoStartCountdownText}" FontSize="12" Foreground="#666666" Margin="0,0,0,4"
-                                               TextWrapping="Wrap"/>
+                                               TextWrapping="Wrap" TextAlignment="Center"/>
                                     <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding AutoStartCountdownProgress}"/>
                                 </StackPanel>
                                 <Button Command="{Binding TransferPrimaryCommand}"
                                         FontWeight="SemiBold" Padding="0" Foreground="White" BorderThickness="0" Cursor="Hand"
-                                        HorizontalAlignment="Center" Width="128" Height="34">
+                                        HorizontalAlignment="Stretch" Width="128" Height="34">
                                     <Button.Style>
                                         <Style TargetType="Button">
                                             <Setter Property="Background" Value="#2B579A"/>
@@ -229,13 +230,15 @@
                                         </Grid>
                                     </Viewbox>
                                 </Button>
-                                <TextBlock Text="{Binding StatusText}" HorizontalAlignment="Center"
-                                           FontStyle="Italic" Foreground="#666666" Margin="0,4,0,0"
-                                           TextAlignment="Center" TextWrapping="Wrap"/>
                             </StackPanel>
                             <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"
                                     VerticalAlignment="Top"/>
-                        </WrapPanel>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding StatusText}"
+                                   HorizontalAlignment="Stretch"
+                                   FontStyle="Italic" Foreground="#666666" Margin="0,4,0,0"
+                                   TextAlignment="Center" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
 
