@@ -166,80 +166,92 @@
                                          ToolTip="After launch (and the Auto-start delay), keep watching for remux-ready MP4s and transfer them as they appear. Use Stop Transfer to return to Manual start."/>
                         </StackPanel>
 
-                        <!-- Button row is centered on its own; status sits full-width below so long labels cannot shift/wrap it. -->
+                        <!-- Button row stays fixed; countdown/status live below so Cancel never shifts. -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <StackPanel Width="128" Margin="0,0,8,0">
-                                <StackPanel Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"
-                                            Margin="0,0,0,6">
-                                    <TextBlock Text="{Binding AutoStartCountdownText}" FontSize="12" Foreground="#666666" Margin="0,0,0,4"
-                                               TextWrapping="Wrap" TextAlignment="Center"/>
-                                    <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding AutoStartCountdownProgress}"/>
-                                </StackPanel>
-                                <Button Command="{Binding TransferPrimaryCommand}"
-                                        FontWeight="SemiBold" Padding="0" Foreground="White" BorderThickness="0" Cursor="Hand"
-                                        HorizontalAlignment="Stretch" Width="128" Height="34">
-                                    <Button.Style>
-                                        <Style TargetType="Button">
-                                            <Setter Property="Background" Value="#2B579A"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsAutoStartCountdownActive}" Value="True">
-                                                    <Setter Property="Background" Value="#B33A3A"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
-                                                    <Setter Property="Background" Value="#E6A817"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding ShowStopTransferButton}" Value="True">
-                                                    <Setter Property="Background" Value="#B33A3A"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="10,4">
-                                        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <TextBlock Text="Run Transfer" FontWeight="SemiBold" Foreground="White" Margin="0"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsAutoStartCountdownActive}" Value="True">
-                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
-                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ShowStopTransferButton}" Value="True">
-                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <TextBlock Text="Cancel" FontWeight="SemiBold" Foreground="White" Margin="0"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"/>
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                        Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}">
-                                                <TextBlock Text="Cancel" FontWeight="SemiBold" FontSize="13" Foreground="#1A1A1A"
-                                                           TextAlignment="Center" Margin="0" LineHeight="14"/>
-                                                <TextBlock Text="(keep open)" FontSize="10" Foreground="#1A1A1A"
-                                                           TextAlignment="Center" Margin="0" LineHeight="12"/>
-                                            </StackPanel>
-                                            <TextBlock Text="Stop Transfer" FontWeight="SemiBold" Foreground="White" Margin="0"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       Visibility="{Binding ShowStopTransferButton, Converter={StaticResource BoolToVis}}"/>
-                                        </Grid>
-                                    </Viewbox>
-                                </Button>
-                            </StackPanel>
+                            <Button Command="{Binding TransferPrimaryCommand}"
+                                    FontWeight="SemiBold" Padding="0" Foreground="White" BorderThickness="0" Cursor="Hand"
+                                    HorizontalAlignment="Left" Width="128" Height="34" Margin="0,0,8,0"
+                                    VerticalAlignment="Center">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="#2B579A"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAutoStartCountdownActive}" Value="True">
+                                                <Setter Property="Background" Value="#B33A3A"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
+                                                <Setter Property="Background" Value="#E6A817"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ShowStopTransferButton}" Value="True">
+                                                <Setter Property="Background" Value="#B33A3A"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="10,4">
+                                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="Run Transfer" FontWeight="SemiBold" Foreground="White" Margin="0"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsAutoStartCountdownActive}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding ShowStopTransferButton}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="Cancel" FontWeight="SemiBold" Foreground="White" Margin="0"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"/>
+                                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                    Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="Cancel" FontWeight="SemiBold" FontSize="13" Foreground="#1A1A1A"
+                                                       TextAlignment="Center" Margin="0" LineHeight="14"/>
+                                            <TextBlock Text="(keep open)" FontSize="10" Foreground="#1A1A1A"
+                                                       TextAlignment="Center" Margin="0" LineHeight="12"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Stop Transfer" FontWeight="SemiBold" Foreground="White" Margin="0"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Visibility="{Binding ShowStopTransferButton, Converter={StaticResource BoolToVis}}"/>
+                                    </Grid>
+                                </Viewbox>
+                            </Button>
                             <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"
-                                    VerticalAlignment="Top"/>
+                                    VerticalAlignment="Center" Margin="0"/>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,6,0,0" HorizontalAlignment="Stretch"
+                                    Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding AutoStartCountdownText}" FontSize="12" Foreground="#666666" Margin="0,0,0,4"
+                                       TextWrapping="Wrap" TextAlignment="Center"/>
+                            <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding AutoStartCountdownProgress}"
+                                         HorizontalAlignment="Center" Width="200"/>
                         </StackPanel>
 
                         <TextBlock Text="{Binding StatusText}"
                                    HorizontalAlignment="Stretch"
                                    FontStyle="Italic" Foreground="#666666" Margin="0,4,0,0"
-                                   TextAlignment="Center" TextWrapping="Wrap"/>
+                                   TextAlignment="Center" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoStartCountdownActive}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
                 </Border>
 

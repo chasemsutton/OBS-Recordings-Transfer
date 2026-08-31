@@ -555,10 +555,10 @@ public class MainViewModel : ViewModelBase
             if (_isClosing)
                 return;
 
-            // While a transfer is running, only refresh pending rows (e.g. remux → move)
-            // so in-progress progress/history are not wiped.
+            // While a transfer is running, merge the plan into the queue without wiping
+            // in-progress progress or completed history (and add newly appeared files).
             if (IsRunning)
-                UpdatePendingQueueFromPlan(plan);
+                MergeQueueFromPlanWhileRunning(plan);
             else
                 ApplyPlanToQueue(plan, logToActivity);
 
@@ -593,8 +593,11 @@ public class MainViewModel : ViewModelBase
 
     private void ApplyPlanToQueue(List<TransferActionPlan> plan, bool logToActivity)
     {
+        plan = OrderPlanForAction(plan);
+
         var history = TransferItems
             .Where(i => i.IsHistoryItem)
+            .OrderByDescending(i => i.CompletedAt ?? DateTime.MinValue)
             .ToList();
 
         var active = TransferItems
@@ -630,48 +633,118 @@ public class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Updates pending queue rows from a fresh plan without touching in-progress progress.
-    /// Also revives premature remux skips so files can flip to Move while an earlier copy runs.
+    /// While a transfer is running: update pending rows, revive remux skips, and insert
+    /// newly detected files — without resetting in-progress progress or history.
+    /// Active rows follow transfer order; completed history is newest-first under them.
     /// </summary>
-    private void UpdatePendingQueueFromPlan(List<TransferActionPlan> plan)
+    private void MergeQueueFromPlanWhileRunning(List<TransferActionPlan> plan)
     {
-        var itemsByName = TransferItems
+        plan = OrderPlanForAction(plan);
+
+        var planNames = new HashSet<string>(
+            plan.Select(p => p.FileName),
+            StringComparer.OrdinalIgnoreCase);
+
+        var reusable = TransferItems
+            .Where(i => !i.IsHistoryItem || i.Status == TransferActionStatus.Skipped)
             .GroupBy(i => i.FileName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(i => i.Status == TransferActionStatus.InProgress)
+                    .ThenByDescending(i => i.Status == TransferActionStatus.Pending)
+                    .First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var history = TransferItems
+            .Where(i => i.IsHistoryItem && i.Status != TransferActionStatus.Skipped)
+            .OrderByDescending(i => i.CompletedAt ?? DateTime.MinValue)
+            .ToList();
+
+        var inProgressOrphans = TransferItems
+            .Where(i => i.Status == TransferActionStatus.InProgress && !planNames.Contains(i.FileName))
+            .ToList();
+
+        var nextActive = new List<TransferActionViewModel>();
 
         foreach (var planItem in plan)
         {
-            if (!itemsByName.TryGetValue(planItem.FileName, out var items))
-                continue;
-
-            foreach (var item in items)
+            if (reusable.TryGetValue(planItem.FileName, out var existing))
             {
-                if (item.Status == TransferActionStatus.InProgress)
-                    continue;
-
-                if (item.Status == TransferActionStatus.Skipped
-                    && planItem.ActionType is TransferActionType.Move or TransferActionType.WaitingRemux)
+                if (existing.Status == TransferActionStatus.InProgress)
                 {
-                    item.Status = TransferActionStatus.Pending;
-                    item.CompletedAt = null;
-                    item.Progress = 0;
-                    item.ProgressText = "";
-                    item.ActionType = planItem.ActionType;
-                    item.Label = planItem.Description;
+                    if (!nextActive.Contains(existing))
+                        nextActive.Add(existing);
                     continue;
                 }
 
-                if (item.Status != TransferActionStatus.Pending)
-                    continue;
+                if (existing.Status == TransferActionStatus.Skipped)
+                {
+                    existing.Status = TransferActionStatus.Pending;
+                    existing.CompletedAt = null;
+                    existing.Progress = 0;
+                    existing.ProgressText = "";
+                }
 
-                if (item.ActionType == planItem.ActionType
-                    && string.Equals(item.Label, planItem.Description, StringComparison.Ordinal))
+                if (existing.Status == TransferActionStatus.Pending)
+                {
+                    existing.ActionType = planItem.ActionType;
+                    existing.Label = planItem.Description;
+                    if (!nextActive.Contains(existing))
+                        nextActive.Add(existing);
                     continue;
-
-                item.ActionType = planItem.ActionType;
-                item.Label = planItem.Description;
+                }
             }
+
+            nextActive.Add(new TransferActionViewModel(planItem));
         }
+
+        // Current work not in the plan anymore (e.g. mid-copy) stays among active tasks.
+        foreach (var orphan in inProgressOrphans)
+        {
+            if (!nextActive.Contains(orphan))
+                nextActive.Insert(0, orphan);
+        }
+
+        TransferItems.Clear();
+        foreach (var item in nextActive)
+            TransferItems.Add(item);
+
+        foreach (var item in history)
+        {
+            if (planNames.Contains(item.FileName))
+                continue;
+            TransferItems.Add(item);
+        }
+    }
+
+    /// <summary>
+    /// Matches transfer execution order: destination skips, ready moves, remux waits, then deletes.
+    /// </summary>
+    private static List<TransferActionPlan> OrderPlanForAction(IReadOnlyList<TransferActionPlan> plan) =>
+        plan.OrderBy(p => p.ActionType switch
+        {
+            TransferActionType.Skip => 0,
+            TransferActionType.Move => 1,
+            TransferActionType.WaitingRemux => 2,
+            TransferActionType.Delete => 3,
+            _ => 4
+        }).ToList();
+
+    /// <summary>
+    /// Moves a just-finished item below all upcoming work and above older completed items.
+    /// </summary>
+    private void MoveFinishedItemToHistoryTop(TransferActionViewModel item)
+    {
+        if (!TransferItems.Contains(item))
+            return;
+
+        TransferItems.Remove(item);
+
+        var insertAt = 0;
+        while (insertAt < TransferItems.Count && !TransferItems[insertAt].IsHistoryItem)
+            insertAt++;
+
+        TransferItems.Insert(insertAt, item);
     }
 
     private static bool ActivePlansMatch(IReadOnlyList<TransferActionViewModel> active, List<TransferActionPlan> plan)
@@ -1280,18 +1353,21 @@ public class MainViewModel : ViewModelBase
 
             case TransferProgressUpdateKind.Complete:
                 item.MarkCompleted(DateTime.Now, update.Message);
+                MoveFinishedItemToHistoryTop(item);
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;
 
             case TransferProgressUpdateKind.Skipped:
                 item.MarkSkipped(DateTime.Now, update.Message);
+                MoveFinishedItemToHistoryTop(item);
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;
 
             case TransferProgressUpdateKind.Failed:
                 item.MarkFailed(DateTime.Now, update.Message);
+                MoveFinishedItemToHistoryTop(item);
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;
