@@ -11,6 +11,8 @@ namespace ODBC.RecordingsTransfer.Services;
 public class RemuxFileTracker
 {
     public static readonly TimeSpan IncompleteAfterStable = TimeSpan.FromSeconds(30);
+    /// <summary>Extra dwell after moov is found when direct-to-MP4 recording may still be in progress.</summary>
+    public static readonly TimeSpan PostMoovStabilityWait = TimeSpan.FromSeconds(20);
 
     private readonly Dictionary<string, FileWatchState> _states = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _alertedIncomplete = new(StringComparer.OrdinalIgnoreCase);
@@ -77,7 +79,7 @@ public class RemuxFileTracker
         return sb.ToString();
     }
 
-    public RemuxReadiness Evaluate(string sourceFile, bool checkEnabled)
+    public RemuxReadiness Evaluate(string sourceFile, bool checkEnabled, bool assumeNoDirectMp4Recording = true)
     {
         var fileName = Path.GetFileName(sourceFile) ?? sourceFile;
         if (!checkEnabled)
@@ -106,7 +108,7 @@ public class RemuxFileTracker
 
         if (state.LastSize >= 0 && state.LastSize != size)
         {
-            // File is still growing (typical while cutting/copying into the source folder).
+            // File is still growing (recording, remux, or copy into the source folder).
             state.LastSize = size;
             state.StableSinceUtc = null;
             state.HasMoov = false;
@@ -128,8 +130,19 @@ public class RemuxFileTracker
                 state.HasMoov = true;
                 state.MoovChecked = true;
                 state.DefinitiveMissingSinceUtc = null;
-                SetReadiness(state, RemuxReadiness.Ready);
-                return RemuxReadiness.Ready;
+
+                // Remux-only workflows can move as soon as moov appears on a non-growing file.
+                // Direct-to-MP4 recording needs a longer stable window so a brief size pause
+                // mid-record cannot start a transfer.
+                if (assumeNoDirectMp4Recording
+                    || now - state.StableSinceUtc.Value >= PostMoovStabilityWait)
+                {
+                    SetReadiness(state, RemuxReadiness.Ready);
+                    return RemuxReadiness.Ready;
+                }
+
+                SetReadiness(state, RemuxReadiness.Waiting);
+                return RemuxReadiness.Waiting;
 
             case MoovProbeResult.Unavailable:
                 // Locked/partial reads during copy must not count as "moov missing".

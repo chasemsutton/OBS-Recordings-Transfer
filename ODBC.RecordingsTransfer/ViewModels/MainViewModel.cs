@@ -25,6 +25,7 @@ public class MainViewModel : ViewModelBase
         nameof(VerifyTransfer),
         nameof(VerifyRemux),
         nameof(CheckRemuxComplete),
+        nameof(AssumeNoDirectMp4Recording),
         nameof(TransferMode),
         nameof(AutoRunDelayText),
         nameof(StartWithWindows),
@@ -41,7 +42,8 @@ public class MainViewModel : ViewModelBase
         nameof(DestinationPath),
         nameof(MaxFileAgeDays),
         nameof(MinFreeSpaceGb),
-        nameof(CheckRemuxComplete)
+        nameof(CheckRemuxComplete),
+        nameof(AssumeNoDirectMp4Recording)
     };
 
     private readonly ConfigService _configService;
@@ -67,6 +69,7 @@ public class MainViewModel : ViewModelBase
     private bool _verifyTransfer;
     private bool _verifyRemux;
     private bool _checkRemuxComplete = true;
+    private bool _assumeNoDirectMp4Recording;
     private TransferMode _transferMode = TransferMode.None;
     private string _autoRunDelayText = "5";
     private bool _startWithWindows;
@@ -195,6 +198,16 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _checkRemuxComplete, value))
+                _transferService.RemuxTracker.InvalidateCache();
+        }
+    }
+
+    public bool AssumeNoDirectMp4Recording
+    {
+        get => _assumeNoDirectMp4Recording;
+        set
+        {
+            if (SetProperty(ref _assumeNoDirectMp4Recording, value))
                 _transferService.RemuxTracker.InvalidateCache();
         }
     }
@@ -563,6 +576,7 @@ public class MainViewModel : ViewModelBase
                 ApplyPlanToQueue(plan, logToActivity);
 
             ShowRemuxIncompleteAlerts();
+            ShowLowSpaceNoDeletesAlert();
         }
         finally
         {
@@ -584,10 +598,29 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private void ShowLowSpaceNoDeletesAlert()
+    {
+        if (!_transferService.TryConsumeLowSpaceNoDeletesAlert(out var availableGb, out var minGb))
+            return;
+
+        AppendLog(
+            $"Source drive low on space ({availableGb:0.##} GB free; minimum {minGb:0.##} GB) and no MKV files meet deletion criteria.");
+        System.Windows.MessageBox.Show(
+            $"The source drive is below the minimum free space ({minGb:0.##} GB).\n\n" +
+            $"About {availableGb:0.##} GB is free, and no MKV files currently meet the deletion criteria " +
+            "(age and matching MP4).\n\n" +
+            "Free up space manually, or adjust Max File Age / Min Free Space in Settings.\n\n" +
+            "This warning will not show again until the app is restarted.",
+            "Low Free Space",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
     private List<TransferActionPlan> BuildTransferQueue(bool logToActivity)
     {
         var plan = _transferService.BuildPlan(ToSettings());
         ApplyPlanToQueue(plan, logToActivity);
+        ShowLowSpaceNoDeletesAlert();
         return plan;
     }
 
@@ -842,6 +875,7 @@ public class MainViewModel : ViewModelBase
             VerifyTransfer = settings.VerifyTransfer;
             VerifyRemux = settings.VerifyRemux;
             CheckRemuxComplete = settings.CheckRemuxComplete;
+            AssumeNoDirectMp4Recording = settings.AssumeNoDirectMp4Recording;
             TransferMode = settings.TransferMode;
             AutoRunDelayText = settings.AutoRunDelaySeconds.ToString();
             StartWithWindows = settings.StartWithWindows;
@@ -913,6 +947,7 @@ public class MainViewModel : ViewModelBase
         VerifyTransfer = VerifyTransfer,
         VerifyRemux = VerifyRemux,
         CheckRemuxComplete = CheckRemuxComplete,
+        AssumeNoDirectMp4Recording = AssumeNoDirectMp4Recording,
         TransferMode = TransferMode,
         AutoRunDelaySeconds = ParseAutoRunDelay(),
         StartWithWindows = StartWithWindows,

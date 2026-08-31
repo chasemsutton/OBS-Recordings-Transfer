@@ -16,6 +16,10 @@ public class TransferService
 
     private readonly LoggingService _logger;
     private readonly RemuxFileTracker _remuxTracker = new();
+    private bool _lowSpaceNoDeletesAlertShown;
+    private bool _pendingLowSpaceNoDeletesAlert;
+    private double _pendingLowSpaceAvailableGb;
+    private double _pendingLowSpaceMinGb;
 
     public TransferService(LoggingService logger)
     {
@@ -23,6 +27,21 @@ public class TransferService
     }
 
     public RemuxFileTracker RemuxTracker => _remuxTracker;
+
+    /// <summary>
+    /// Returns true once when source free space is below the minimum and no MKV deletes are planned.
+    /// Only fires once per app session.
+    /// </summary>
+    public bool TryConsumeLowSpaceNoDeletesAlert(out double availableGb, out double minGb)
+    {
+        availableGb = _pendingLowSpaceAvailableGb;
+        minGb = _pendingLowSpaceMinGb;
+        if (!_pendingLowSpaceNoDeletesAlert)
+            return false;
+
+        _pendingLowSpaceNoDeletesAlert = false;
+        return true;
+    }
 
     public List<TransferActionPlan> BuildPlan(AppSettings settings)
     {
@@ -50,6 +69,7 @@ public class TransferService
             {
                 var refreshed = RefreshWaitingRemuxItems(cached, settings);
                 _remuxTracker.StoreCachedPlan(fingerprint, refreshed);
+                ConsiderLowSpaceNoDeletesAlert(settings, refreshed);
                 return refreshed;
             }
 
@@ -74,6 +94,7 @@ public class TransferService
                 AddMkvPlanItem(mkv, settings, sourceNames, targetNames, dataToDelete, plan);
 
             _remuxTracker.StoreCachedPlan(fingerprint, plan);
+            ConsiderLowSpaceNoDeletesAlert(settings, plan);
         }
         catch
         {
@@ -82,6 +103,44 @@ public class TransferService
         }
 
         return plan;
+    }
+
+    private void ConsiderLowSpaceNoDeletesAlert(AppSettings settings, List<TransferActionPlan> plan)
+    {
+        if (_lowSpaceNoDeletesAlertShown)
+            return;
+
+        if (!TryGetAvailableGb(settings.SourcePath, out var availableGb))
+            return;
+
+        if (availableGb >= settings.MinFreeSpaceGb)
+            return;
+
+        if (plan.Any(p => p.ActionType == TransferActionType.Delete))
+            return;
+
+        _lowSpaceNoDeletesAlertShown = true;
+        _pendingLowSpaceNoDeletesAlert = true;
+        _pendingLowSpaceAvailableGb = availableGb;
+        _pendingLowSpaceMinGb = settings.MinFreeSpaceGb;
+    }
+
+    private static bool TryGetAvailableGb(string path, out double availableGb)
+    {
+        availableGb = 0;
+        try
+        {
+            var root = Path.GetPathRoot(path);
+            if (string.IsNullOrWhiteSpace(root))
+                return false;
+
+            availableGb = new DriveInfo(root).AvailableFreeSpace / 1_073_741_824.0;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private List<TransferActionPlan> RefreshWaitingRemuxItems(List<TransferActionPlan> cached, AppSettings settings)
@@ -108,7 +167,10 @@ public class TransferService
                 continue;
             }
 
-            var readiness = _remuxTracker.Evaluate(item.SourcePath, settings.CheckRemuxComplete);
+            var readiness = _remuxTracker.Evaluate(
+                item.SourcePath,
+                settings.CheckRemuxComplete,
+                settings.AssumeNoDirectMp4Recording);
             var next = CreateMp4PlanItem(item.SourcePath, item.FileName, readiness);
             if (next.ActionType != item.ActionType
                 || next.RemuxReadiness != item.RemuxReadiness
@@ -192,7 +254,7 @@ public class TransferService
                 }
 
                 var readiness = settings.CheckRemuxComplete
-                    ? _remuxTracker.Evaluate(mp4, true)
+                    ? _remuxTracker.Evaluate(mp4, true, settings.AssumeNoDirectMp4Recording)
                     : RemuxReadiness.Ready;
 
                 switch (readiness)
@@ -288,7 +350,10 @@ public class TransferService
                 return false;
             }
 
-            var readiness = _remuxTracker.Evaluate(sourceFile, settings.CheckRemuxComplete);
+            var readiness = _remuxTracker.Evaluate(
+                sourceFile,
+                settings.CheckRemuxComplete,
+                settings.AssumeNoDirectMp4Recording);
             if (readiness == RemuxReadiness.Ready)
             {
                 report(new TransferProgressUpdate
@@ -347,7 +412,10 @@ public class TransferService
             return;
         }
 
-        var readiness = _remuxTracker.Evaluate(sourceFile, settings.CheckRemuxComplete);
+        var readiness = _remuxTracker.Evaluate(
+            sourceFile,
+            settings.CheckRemuxComplete,
+            settings.AssumeNoDirectMp4Recording);
         plan.Add(CreateMp4PlanItem(sourceFile, fileName, readiness));
     }
 

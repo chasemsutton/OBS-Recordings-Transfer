@@ -371,6 +371,11 @@
                                       ToolTip="Open the window minimized (useful when starting with Windows)."/>
                         </StackPanel>
 
+                        <CheckBox Content="I do not record directly in MP4 (skips extra checks)"
+                                  IsChecked="{Binding AssumeNoDirectMp4Recording}"
+                                  Margin="0,8,0,0"
+                                  ToolTip="Unchecked (safer default): after the remux index (moov) appears, wait ~20 more seconds of stable size so a live direct-to-MP4 recording is less likely to be copied during a brief size pause. Checked (typical OBS remux to MP4): transfer as soon as moov appears on a non-growing file."/>
+
                         <WrapPanel Margin="0,8,0,0">
                             <CheckBox Content="Check for updates on startup"
                                       IsChecked="{Binding CheckForUpdatesOnStartup}"
@@ -391,10 +396,10 @@
                         <Expander Header="Advanced" IsExpanded="False" Margin="0,8,0,0"
                                   ToolTip="Less-common options. Expand only if you need them.">
                             <StackPanel Margin="0,10,0,0">
-                                <CheckBox Content="Wait for remux to finish before moving MP4s"
+                                <CheckBox Content="Wait for remux to finish before moving MP4s (off = high risk of file corruption)"
                                           IsChecked="{Binding CheckRemuxComplete}"
                                           Margin="0,0,0,8"
-                                          ToolTip="Detects OBS remux completion (stable file size + moov atom). Turn off for non-OBS remuxers."/>
+                                          ToolTip="Detects when an MP4 is finished (stable file size + moov atom). Leave on whenever recordings may still be writing. Turning this off can copy a partial/corrupt file."/>
                                 <CheckBox Content="Don't warn when destination folder year doesn't match current year"
                                           IsChecked="{Binding SkipDestinationYearWarning}"
                                           Margin="0,0,0,8"

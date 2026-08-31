@@ -35,6 +35,8 @@ public class ConfigService
         settings.VerifyTransfer = bool.Parse(ReadValue(lines, "Verify Transfer", settings.VerifyTransfer.ToString()));
         settings.VerifyRemux = bool.Parse(ReadValue(lines, "Verify Remux", settings.VerifyRemux.ToString()));
         settings.CheckRemuxComplete = bool.Parse(ReadValue(lines, "Check Remux Complete", settings.CheckRemuxComplete.ToString()));
+        settings.AssumeNoDirectMp4Recording = bool.Parse(
+            ReadValue(lines, "Assume No Direct MP4 Recording", settings.AssumeNoDirectMp4Recording.ToString()));
         settings.TransferMode = ParseTransferMode(lines, settings.TransferMode);
         settings.AutoRunDelaySeconds = ParseDelay(ReadValue(lines, "Auto Start Delay (seconds)", settings.AutoRunDelaySeconds.ToString()));
         settings.StartWithWindows = bool.Parse(ReadValue(lines, "Start With Windows", settings.StartWithWindows.ToString()));
@@ -65,6 +67,7 @@ public class ConfigService
             $"Verify Transfer: \"{settings.VerifyTransfer}\"",
             $"Verify Remux: \"{settings.VerifyRemux}\"",
             $"Check Remux Complete: \"{settings.CheckRemuxComplete}\"",
+            $"Assume No Direct MP4 Recording: \"{settings.AssumeNoDirectMp4Recording}\"",
             $"Transfer Mode: \"{settings.TransferMode}\"",
             $"Begin Transfer On Startup: \"{settings.TransferMode == TransferMode.AutoStart}\"",
             $"Auto Start Delay (seconds): \"{settings.AutoRunDelaySeconds}\"",

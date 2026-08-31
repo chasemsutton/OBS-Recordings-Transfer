@@ -11,6 +11,11 @@ public class AppSettings
     public bool VerifyRemux { get; set; } = false;
     /// <summary>When true, wait for OBS-style remux (stable size + moov) before moving MP4s.</summary>
     public bool CheckRemuxComplete { get; set; } = true;
+    /// <summary>
+    /// When true (typical OBS remux workflow), become Ready as soon as moov is found on a stable file.
+    /// When false, require extra stable time after moov so a live direct-to-MP4 recording is less likely to be copied early.
+    /// </summary>
+    public bool AssumeNoDirectMp4Recording { get; set; } = false;
     public TransferMode TransferMode { get; set; } = TransferMode.None;
     public int AutoRunDelaySeconds { get; set; } = 5;
     public bool StartWithWindows { get; set; } = false;
