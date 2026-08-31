@@ -13,6 +13,7 @@
         Loaded="Window_Loaded"
         Closing="Window_Closing">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <Style TargetType="Button">
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
@@ -183,9 +184,13 @@
                     <Button Content="Run Transfer" Command="{Binding RunTransferCommand}" FontWeight="SemiBold" Padding="20,6"/>
                     <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"/>
                     <Button Content="Open Log Folder" Command="{Binding OpenLogFolderCommand}" Background="#666666"/>
-                    <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Margin="12,0,0,0"
-                               FontStyle="Italic" Foreground="#666666" Cursor="Hand"
-                               MouseLeftButtonDown="StatusText_Click"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                                   FontStyle="Italic" Foreground="#666666"/>
+                        <Button Content="Cancel" Command="{Binding CancelAutoCloseCommand}"
+                                Margin="8,0,0,0" Padding="10,4" Background="#666666"
+                                Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}"/>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>

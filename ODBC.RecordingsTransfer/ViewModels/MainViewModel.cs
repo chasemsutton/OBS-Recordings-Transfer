@@ -59,6 +59,7 @@ public class MainViewModel : ViewModelBase
     private int _leftCount;
     private bool _isLoadingSettings;
     private CancellationTokenSource? _autoSaveCts;
+    private bool _isAutoCloseCountdownActive;
 
     public MainViewModel()
     {
@@ -188,6 +189,12 @@ public class MainViewModel : ViewModelBase
     {
         get => _statusText;
         set => SetProperty(ref _statusText, value);
+    }
+
+    public bool IsAutoCloseCountdownActive
+    {
+        get => _isAutoCloseCountdownActive;
+        set => SetProperty(ref _isAutoCloseCountdownActive, value);
     }
 
     public string LogText
@@ -609,12 +616,13 @@ public class MainViewModel : ViewModelBase
         CancelAutoClose();
         _autoCloseCts = new CancellationTokenSource();
         var token = _autoCloseCts.Token;
+        IsAutoCloseCountdownActive = true;
 
         try
         {
             for (var i = AutoCloseSeconds; i > 0; i--)
             {
-                StatusText = $"Closing in {i} second{(i == 1 ? "" : "s")}... (click status to cancel)";
+                StatusText = $"Closing in {i} second{(i == 1 ? "" : "s")}...";
                 await Task.Delay(1000, token);
             }
 
@@ -625,11 +633,18 @@ public class MainViewModel : ViewModelBase
         {
             StatusText = "Ready";
         }
+        finally
+        {
+            IsAutoCloseCountdownActive = false;
+        }
     }
 
     private void CancelAutoClose()
     {
-        _autoCloseCts?.Cancel();
+        if (_autoCloseCts == null)
+            return;
+
+        _autoCloseCts.Cancel();
         _autoCloseCts = null;
     }
 

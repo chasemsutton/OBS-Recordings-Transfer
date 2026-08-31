@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Windows;
-using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using ODBC.RecordingsTransfer.ViewModels;
 
@@ -49,10 +48,5 @@ public partial class MainWindow : Window
             if (result != MessageBoxResult.Yes)
                 e.Cancel = true;
         }
-    }
-
-    private void StatusText_Click(object sender, MouseButtonEventArgs e)
-    {
-        _viewModel.CancelAutoCloseCommand.Execute(null);
     }
 }
