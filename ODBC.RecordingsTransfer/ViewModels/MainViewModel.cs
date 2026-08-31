@@ -38,6 +38,7 @@ public class MainViewModel : ViewModelBase
     private readonly UpdateService _updateService;
     private CancellationTokenSource? _autoCloseCts;
     private CancellationTokenSource? _autoStartCts;
+    private bool _isClosing;
 
     private string _sourcePath = "";
     private string _destinationPath = "";
@@ -307,7 +308,10 @@ public class MainViewModel : ViewModelBase
 
         if (AutoRunOnStartup)
         {
-            BuildTransferQueue(logToActivity: true);
+            if (_isClosing)
+                return;
+
+            BuildTransferQueue(logToActivity: false);
 
             var delay = ParseAutoRunDelay();
             if (delay > 0)
@@ -315,6 +319,9 @@ public class MainViewModel : ViewModelBase
                 if (!await StartAutoStartCountdownAsync(delay))
                     return;
             }
+
+            if (_isClosing)
+                return;
 
             await RunTransferAsync();
         }
@@ -351,7 +358,6 @@ public class MainViewModel : ViewModelBase
             for (var remaining = totalSeconds; remaining > 0; remaining--)
             {
                 AutoStartCountdownText = $"Transfer starting in {remaining} second{(remaining == 1 ? "" : "s")}...";
-                StatusText = AutoStartCountdownText;
                 AutoStartCountdownProgress = (totalSeconds - remaining) / (double)totalSeconds;
                 await Task.Delay(1000, token);
             }
@@ -380,6 +386,14 @@ public class MainViewModel : ViewModelBase
 
         _autoStartCts.Cancel();
         _autoStartCts = null;
+    }
+
+    public void PrepareForClose()
+    {
+        _isClosing = true;
+        CancelAutoStart();
+        CancelAutoClose();
+        _autoSaveCts?.Cancel();
     }
 
     private void LoadSettings()
@@ -591,12 +605,18 @@ public class MainViewModel : ViewModelBase
 
     private async Task RunTransferAsync()
     {
+        if (_isClosing)
+            return;
+
         if (!ConfirmDestinationPath())
         {
             StatusText = "Transfer cancelled";
             AppendLog("Transfer cancelled by user (destination year warning).");
             return;
         }
+
+        if (_isClosing)
+            return;
 
         CancelAutoClose();
         CancelAutoStart();
@@ -658,7 +678,7 @@ public class MainViewModel : ViewModelBase
                     AppendLog($"ERROR: {error}");
             }
 
-            if (AutoCloseSeconds > 0)
+            if (!_isClosing && AutoCloseSeconds > 0)
                 _ = StartAutoCloseAsync();
         }
         catch (Exception ex)

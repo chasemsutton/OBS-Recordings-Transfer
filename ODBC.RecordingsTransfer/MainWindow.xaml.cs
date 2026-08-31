@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using ODBC.RecordingsTransfer.ViewModels;
@@ -17,6 +17,10 @@ public partial class MainWindow : Window
     private const double CompactMinWidth = 400;
 
     private readonly MainViewModel _viewModel;
+    private double _expandedHeight = ExpandedHeight;
+    private double _expandedWidth = ExpandedWidth;
+    private WindowState _expandedWindowState = WindowState.Normal;
+    private bool _isCompact;
 
     public MainWindow()
     {
@@ -57,25 +61,80 @@ public partial class MainWindow : Window
                 MessageBoxImage.Warning);
 
             if (result != MessageBoxResult.Yes)
+            {
                 e.Cancel = true;
+                return;
+            }
         }
+
+        _viewModel.PrepareForClose();
     }
 
     private void ApplyLayoutForSettingsPanel(bool showSettings)
     {
         if (showSettings)
-        {
-            MinHeight = ExpandedMinHeight;
-            MinWidth = ExpandedMinWidth;
-            Height = ExpandedHeight;
-            Width = ExpandedWidth;
-        }
+            ApplyExpandedLayout();
         else
+            ApplyCompactLayout();
+    }
+
+    private void ApplyCompactLayout()
+    {
+        if (!_isCompact)
+            CaptureExpandedLayout();
+
+        MinWidth = CompactMinWidth;
+        MinHeight = CompactMinHeight;
+
+        if (WindowState != WindowState.Normal)
+            WindowState = WindowState.Normal;
+
+        Width = CompactWidth;
+        Height = CompactHeight;
+        _isCompact = true;
+
+        ActivityLogColumn.Width = new GridLength(0);
+        TransferQueueColumn.Width = new GridLength(1, GridUnitType.Star);
+    }
+
+    private void ApplyExpandedLayout()
+    {
+        ActivityLogColumn.Width = new GridLength(1, GridUnitType.Star);
+        TransferQueueColumn.Width = new GridLength(300);
+
+        MinWidth = ExpandedMinWidth;
+        MinHeight = ExpandedMinHeight;
+
+        if (_isCompact)
         {
-            MinHeight = CompactMinHeight;
-            MinWidth = CompactMinWidth;
-            Height = CompactHeight;
-            Width = CompactWidth;
+            Width = Math.Max(_expandedWidth, ExpandedMinWidth);
+            Height = Math.Max(_expandedHeight, ExpandedMinHeight);
+            WindowState = _expandedWindowState;
         }
+
+        _isCompact = false;
+    }
+
+    private void CaptureExpandedLayout()
+    {
+        _expandedWindowState = WindowState == WindowState.Minimized
+            ? WindowState.Normal
+            : WindowState;
+
+        if (IsLoaded)
+        {
+            var width = WindowState == WindowState.Normal ? Width : RestoreBounds.Width;
+            var height = WindowState == WindowState.Normal ? Height : RestoreBounds.Height;
+
+            if (width >= ExpandedMinWidth && height >= ExpandedMinHeight)
+            {
+                _expandedWidth = width;
+                _expandedHeight = height;
+                return;
+            }
+        }
+
+        _expandedWidth = ExpandedWidth;
+        _expandedHeight = ExpandedHeight;
     }
 }

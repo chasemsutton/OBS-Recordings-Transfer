@@ -5,7 +5,6 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:ODBC.RecordingsTransfer.ViewModels"
         xmlns:models="clr-namespace:ODBC.RecordingsTransfer.Models"
-        xmlns:conv="clr-namespace:ODBC.RecordingsTransfer.Converters"
         mc:Ignorable="d"
         Title="ODBC Recordings Transfer"
         Height="760" Width="1040"
@@ -15,7 +14,6 @@
         Closing="Window_Closing">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
         <Style TargetType="Button">
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
@@ -111,8 +109,8 @@
 
         <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="12" Margin="0,0,0,12"
                 BorderBrush="#E0E0E0" BorderThickness="1">
-            <StackPanel Orientation="Horizontal">
-                <StackPanel Margin="0,0,8,0" VerticalAlignment="Bottom">
+            <WrapPanel>
+                <StackPanel Margin="0,0,8,0">
                     <StackPanel Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"
                                 Margin="0,0,0,6" MinWidth="200">
                         <TextBlock Text="{Binding AutoStartCountdownText}" FontSize="12" Foreground="#666666" Margin="0,0,0,4"/>
@@ -133,10 +131,10 @@
                         </Button.Style>
                     </Button>
                 </StackPanel>
-                <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5" VerticalAlignment="Bottom"/>
-                <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555" VerticalAlignment="Bottom"/>
+                <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"/>
+                <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"/>
                 <Button Content="Open Log Folder" Command="{Binding OpenLogFolderCommand}" Background="#666666"
-                        Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}" VerticalAlignment="Bottom"/>
+                        Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
                     <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                                FontStyle="Italic" Foreground="#666666"/>
@@ -144,7 +142,7 @@
                             Margin="8,0,0,0" Padding="10,4" Background="#666666"
                             Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}"/>
                 </StackPanel>
-            </StackPanel>
+            </WrapPanel>
         </Border>
 
         <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="16" Margin="0,0,0,12"
@@ -241,8 +239,8 @@
 
         <Grid Grid.Row="4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="300"/>
+                <ColumnDefinition x:Name="ActivityLogColumn" Width="*"/>
+                <ColumnDefinition x:Name="TransferQueueColumn" Width="300"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="White" CornerRadius="8" Padding="12" Margin="0,0,8,0"
@@ -268,19 +266,6 @@
 
             <Border x:Name="TransferQueuePanel" Grid.Column="1" Background="White" CornerRadius="8" Padding="12"
                     BorderBrush="#E0E0E0" BorderThickness="1">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="Grid.Column" Value="1"/>
-                        <Setter Property="Grid.ColumnSpan" Value="1"/>
-                        <Setter Property="Margin" Value="0"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding ShowSettingsPanel}" Value="False">
-                                <Setter Property="Grid.Column" Value="0"/>
-                                <Setter Property="Grid.ColumnSpan" Value="2"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
