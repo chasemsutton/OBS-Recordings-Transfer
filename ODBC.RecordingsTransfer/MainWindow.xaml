@@ -152,18 +152,16 @@
                     </WrapPanel>
                 </Border>
 
-                <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="8,6" Margin="0,0,0,12"
-                        BorderBrush="#E0E0E0" BorderThickness="1">
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Left" Text="Destination"
-                                   FontSize="11" Foreground="#888888" VerticalAlignment="Center"
-                                   Margin="0,0,8,0"/>
-                        <TextBox Text="{Binding DestinationPath, Mode=OneWay}"
-                                 IsReadOnly="True" FontSize="11" Padding="6,2" Margin="0"
-                                 VerticalContentAlignment="Center"
-                                 ToolTip="{Binding DestinationPath}"/>
-                    </DockPanel>
-                </Border>
+                <DockPanel Grid.Row="2" LastChildFill="True" Margin="4,0,4,12">
+                    <TextBlock DockPanel.Dock="Left" Text="Destination"
+                               FontSize="11" Foreground="#888888" VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <TextBlock Text="{Binding DestinationPath}"
+                               FontSize="11" Foreground="#555555"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding DestinationPath}"/>
+                </DockPanel>
 
                 <Border x:Name="TransferQueuePanel" Grid.Row="3" Background="White" CornerRadius="8" Padding="12"
                         BorderBrush="#E0E0E0" BorderThickness="1">

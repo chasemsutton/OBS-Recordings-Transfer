@@ -11,10 +11,8 @@ public partial class MainWindow : Window
     private const double ExpandedWidth = 1040;
     private const double ExpandedMinHeight = 640;
     private const double ExpandedMinWidth = 900;
-    private const double CompactHeight = 480;
-    private const double CompactWidth = 480;
-    private const double CompactMinHeight = 360;
-    private const double CompactMinWidth = 400;
+    private const double CompactMinHeight = 400;
+    private const double CompactMinWidth = 520;
     private const double CompactColumnWidth = 440;
 
     private readonly MainViewModel _viewModel;
@@ -48,6 +46,9 @@ public partial class MainWindow : Window
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        if (_isCompact)
+            FitCompactWindowToContent();
+
         await _viewModel.InitializeAsync();
     }
 
@@ -90,18 +91,20 @@ public partial class MainWindow : Window
         if (WindowState != WindowState.Normal)
             WindowState = WindowState.Normal;
 
-        Width = CompactWidth;
-        Height = CompactHeight;
-        _isCompact = true;
-
         CompactColumn.Width = new GridLength(CompactColumnWidth);
         SettingsColumn.Width = new GridLength(0);
         MainBodyRow.Height = GridLength.Auto;
         ActivityLogRow.Height = new GridLength(0);
+
+        SizeToContent = SizeToContent.WidthAndHeight;
+        _isCompact = true;
+        FitCompactWindowToContent();
     }
 
     private void ApplyExpandedLayout()
     {
+        SizeToContent = SizeToContent.Manual;
+
         CompactColumn.Width = new GridLength(CompactColumnWidth);
         SettingsColumn.Width = new GridLength(1, GridUnitType.Star);
         MainBodyRow.Height = GridLength.Auto;
@@ -141,5 +144,18 @@ public partial class MainWindow : Window
 
         _expandedWidth = ExpandedWidth;
         _expandedHeight = ExpandedHeight;
+    }
+
+    private void FitCompactWindowToContent()
+    {
+        if (!IsLoaded)
+            return;
+
+        UpdateLayout();
+        if (ActualWidth <= 0 || ActualHeight <= 0)
+            return;
+
+        MinWidth = Math.Max(CompactMinWidth, ActualWidth);
+        MinHeight = Math.Max(CompactMinHeight, ActualHeight);
     }
 }
