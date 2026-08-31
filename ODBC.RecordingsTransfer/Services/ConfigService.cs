@@ -37,6 +37,8 @@ public class ConfigService
         settings.CheckRemuxComplete = bool.Parse(ReadValue(lines, "Check Remux Complete", settings.CheckRemuxComplete.ToString()));
         settings.TransferMode = ParseTransferMode(lines, settings.TransferMode);
         settings.AutoRunDelaySeconds = ParseDelay(ReadValue(lines, "Auto Start Delay (seconds)", settings.AutoRunDelaySeconds.ToString()));
+        settings.StartWithWindows = bool.Parse(ReadValue(lines, "Start With Windows", settings.StartWithWindows.ToString()));
+        settings.StartMinimized = bool.Parse(ReadValue(lines, "Start Minimized", settings.StartMinimized.ToString()));
         settings.CheckForUpdatesOnStartup = bool.Parse(ReadValue(lines, "Check For Updates On Startup", settings.CheckForUpdatesOnStartup.ToString()));
         settings.UpdateChannel = Enum.TryParse<UpdateChannel>(
             ReadValue(lines, "Update Channel", settings.UpdateChannel.ToString()), true, out var channel)
@@ -66,6 +68,8 @@ public class ConfigService
             $"Transfer Mode: \"{settings.TransferMode}\"",
             $"Begin Transfer On Startup: \"{settings.TransferMode == TransferMode.AutoStart}\"",
             $"Auto Start Delay (seconds): \"{settings.AutoRunDelaySeconds}\"",
+            $"Start With Windows: \"{settings.StartWithWindows}\"",
+            $"Start Minimized: \"{settings.StartMinimized}\"",
             $"Check For Updates On Startup: \"{settings.CheckForUpdatesOnStartup}\"",
             $"Update Channel: \"{settings.UpdateChannel}\"",
             $"Skip Destination Year Warning: \"{settings.SkipDestinationYearWarning}\"",

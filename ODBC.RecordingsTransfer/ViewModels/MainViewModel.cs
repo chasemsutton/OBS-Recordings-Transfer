@@ -27,6 +27,8 @@ public class MainViewModel : ViewModelBase
         nameof(CheckRemuxComplete),
         nameof(TransferMode),
         nameof(AutoRunDelayText),
+        nameof(StartWithWindows),
+        nameof(StartMinimized),
         nameof(CheckForUpdatesOnStartup),
         nameof(UpdateChannelName),
         nameof(SkipDestinationYearWarning),
@@ -67,6 +69,8 @@ public class MainViewModel : ViewModelBase
     private bool _checkRemuxComplete = true;
     private TransferMode _transferMode = TransferMode.None;
     private string _autoRunDelayText = "5";
+    private bool _startWithWindows;
+    private bool _startMinimized;
     private bool _checkForUpdatesOnStartup = true;
     private string _updateChannelName = "Stable";
     private bool _skipDestinationYearWarning;
@@ -260,6 +264,18 @@ public class MainViewModel : ViewModelBase
     {
         get => _autoRunDelayText;
         set => SetProperty(ref _autoRunDelayText, value);
+    }
+
+    public bool StartWithWindows
+    {
+        get => _startWithWindows;
+        set => SetProperty(ref _startWithWindows, value);
+    }
+
+    public bool StartMinimized
+    {
+        get => _startMinimized;
+        set => SetProperty(ref _startMinimized, value);
     }
 
     public bool CheckForUpdatesOnStartup
@@ -703,6 +719,8 @@ public class MainViewModel : ViewModelBase
             CheckRemuxComplete = settings.CheckRemuxComplete;
             TransferMode = settings.TransferMode;
             AutoRunDelayText = settings.AutoRunDelaySeconds.ToString();
+            StartWithWindows = settings.StartWithWindows;
+            StartMinimized = settings.StartMinimized;
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
             UpdateChannelName = settings.UpdateChannel.ToString();
             SkipDestinationYearWarning = settings.SkipDestinationYearWarning;
@@ -712,6 +730,8 @@ public class MainViewModel : ViewModelBase
         {
             _isLoadingSettings = false;
         }
+
+        WindowsStartupService.Apply(StartWithWindows);
     }
 
     public bool SkipDestinationYearWarning
@@ -747,7 +767,9 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
-            _configService.Save(ToSettings());
+            var settings = ToSettings();
+            _configService.Save(settings);
+            WindowsStartupService.Apply(settings.StartWithWindows);
         }
         catch (Exception ex)
         {
@@ -768,6 +790,8 @@ public class MainViewModel : ViewModelBase
         CheckRemuxComplete = CheckRemuxComplete,
         TransferMode = TransferMode,
         AutoRunDelaySeconds = ParseAutoRunDelay(),
+        StartWithWindows = StartWithWindows,
+        StartMinimized = StartMinimized,
         CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
         UpdateChannel = ParseUpdateChannel(),
         SkipDestinationYearWarning = SkipDestinationYearWarning,

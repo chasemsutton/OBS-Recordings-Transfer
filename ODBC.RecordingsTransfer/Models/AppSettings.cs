@@ -13,6 +13,8 @@ public class AppSettings
     public bool CheckRemuxComplete { get; set; } = true;
     public TransferMode TransferMode { get; set; } = TransferMode.None;
     public int AutoRunDelaySeconds { get; set; } = 5;
+    public bool StartWithWindows { get; set; } = false;
+    public bool StartMinimized { get; set; } = false;
     public bool CheckForUpdatesOnStartup { get; set; } = true;
     public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Stable;
     public bool SkipDestinationYearWarning { get; set; } = false;

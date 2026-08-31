@@ -310,7 +310,19 @@
                             <TextBlock Text="Auto-start delay (sec)" Margin="0,0,0,4"/>
                             <TextBox Text="{Binding AutoRunDelayText, UpdateSourceTrigger=PropertyChanged}" Width="60"
                                      HorizontalAlignment="Left"
-                                     ToolTip="Used when Auto-start mode is selected. Delay before the transfer begins after launch."/>
+                                     ToolTip="Delay before the first transfer on launch for Auto-start and Continuous modes."/>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,8,0,0">
+                            <TextBlock Text="Continuous mode" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <CheckBox Content="Start with Windows"
+                                      IsChecked="{Binding StartWithWindows}"
+                                      Margin="0,0,0,4"
+                                      ToolTip="Launch the app when you sign in to Windows. Pair with Continuous mode to keep transferring in the background."/>
+                            <CheckBox Content="Start minimized"
+                                      IsChecked="{Binding StartMinimized}"
+                                      Margin="0,0,0,4"
+                                      ToolTip="Open the window minimized (useful when starting with Windows)."/>
                         </StackPanel>
 
                         <WrapPanel Margin="0,4,0,0">

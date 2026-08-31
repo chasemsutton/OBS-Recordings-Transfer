@@ -34,6 +34,8 @@ public partial class MainWindow : Window
         _viewModel.RequestClose += () => Dispatcher.Invoke(Close);
         _viewModel.SettingsPanelVisibilityChanged += ApplyLayoutForSettingsPanel;
         ApplyLayoutForSettingsPanel(_viewModel.ShowSettingsPanel);
+        if (_viewModel.StartMinimized)
+            WindowState = WindowState.Minimized;
     }
 
     private void TrySetWindowIcon()

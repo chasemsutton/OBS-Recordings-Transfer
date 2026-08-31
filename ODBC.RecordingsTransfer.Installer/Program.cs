@@ -10,7 +10,7 @@ internal static class Program
 {
     private const string AppName = "ODBC Recordings Transfer";
     private const string ExeName = "ODBC Recordings Transfer.exe";
-    private const string Version = "2.3.1";
+    private const string Version = "2.3.2";
     private const string Publisher = "Open Door Baptist Church";
     private const string UninstallKeyName = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8F4E2A91-6C3D-4B7E-9F1A-2D5E8C0B4A73}";
 
@@ -212,6 +212,17 @@ internal static class Program
             key?.Close();
             Registry.LocalMachine.DeleteSubKey(UninstallKeyName, throwOnMissingSubKey: false);
 
+            try
+            {
+                using var runKey = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
+                runKey?.DeleteValue("ODBC Recordings Transfer", throwOnMissingValue: false);
+            }
+            catch
+            {
+                // Best-effort cleanup of the optional startup entry.
+            }
+
             MessageBox.Show($"{AppName} was removed.", AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
         }
@@ -293,11 +304,13 @@ internal static class Program
             "Check Remux Complete: \"True\"\r\n" +
             "Transfer Mode: \"None\"\r\n" +
             "Begin Transfer On Startup: \"False\"\r\n" +
+            "Auto Start Delay (seconds): \"5\"\r\n" +
+            "Start With Windows: \"False\"\r\n" +
+            "Start Minimized: \"False\"\r\n" +
             "Check For Updates On Startup: \"True\"\r\n" +
             "Update Channel: \"Stable\"\r\n" +
             "Skip Destination Year Warning: \"False\"\r\n" +
-            "Show Settings Panel: \"True\"\r\n" +
-            "Auto Start Delay (seconds): \"5\"\r\n");
+            "Show Settings Panel: \"True\"\r\n");
     }
 
     private static void RegisterUninstall(string installDir)
