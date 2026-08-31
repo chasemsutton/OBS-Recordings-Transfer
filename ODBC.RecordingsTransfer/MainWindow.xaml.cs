@@ -93,14 +93,18 @@ public partial class MainWindow : Window
         Height = CompactHeight;
         _isCompact = true;
 
-        ActivityLogColumn.Width = new GridLength(0);
-        TransferQueueColumn.Width = new GridLength(1, GridUnitType.Star);
+        CompactColumn.Width = new GridLength(1, GridUnitType.Star);
+        SettingsColumn.Width = new GridLength(0);
+        MainBodyRow.Height = new GridLength(1, GridUnitType.Star);
+        ActivityLogRow.Height = new GridLength(0);
     }
 
     private void ApplyExpandedLayout()
     {
-        ActivityLogColumn.Width = new GridLength(1, GridUnitType.Star);
-        TransferQueueColumn.Width = new GridLength(300);
+        CompactColumn.Width = new GridLength(440);
+        SettingsColumn.Width = new GridLength(1, GridUnitType.Star);
+        MainBodyRow.Height = new GridLength(2, GridUnitType.Star);
+        ActivityLogRow.Height = new GridLength(1, GridUnitType.Star);
 
         MinWidth = ExpandedMinWidth;
         MinHeight = ExpandedMinHeight;
