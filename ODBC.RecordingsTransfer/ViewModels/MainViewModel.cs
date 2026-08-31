@@ -121,12 +121,12 @@ public class MainViewModel : ViewModelBase
                     CancelAutoClose(keepOpen: true);
                 else if (IsAutoStartCountdownActive)
                     CancelAutoStart();
-                else if (TransferMode == TransferMode.Continuous)
-                    StopContinuousMode();
+                else if (ShowStopTransferButton)
+                    StopTransfer(resetContinuousToNone: IsContinuousMode);
                 else
                     _ = RunTransferAsync();
             },
-            _ => TransferMode == TransferMode.Continuous || !IsRunning);
+            _ => true);
         BrowseSourceCommand = new RelayCommand(_ => BrowseFolder(path => SourcePath = path));
         BrowseDestinationCommand = new RelayCommand(_ => BrowseFolder(path => DestinationPath = path));
         ClearLogCommand = new RelayCommand(_ => LogText = "");
@@ -208,6 +208,7 @@ public class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsTransferModeAutoStart));
             OnPropertyChanged(nameof(IsTransferModeContinuous));
             OnPropertyChanged(nameof(IsContinuousMode));
+            OnPropertyChanged(nameof(ShowStopTransferButton));
             CommandManager.InvalidateRequerySuggested();
 
             if (_isLoadingSettings)
@@ -250,6 +251,11 @@ public class MainViewModel : ViewModelBase
 
     public bool IsContinuousMode => TransferMode == TransferMode.Continuous;
 
+    public bool ShowStopTransferButton =>
+        (IsRunning || IsContinuousMode)
+        && !IsAutoStartCountdownActive
+        && !IsAutoCloseCountdownActive;
+
     public string AutoRunDelayText
     {
         get => _autoRunDelayText;
@@ -284,7 +290,10 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _isRunning, value))
+            {
+                OnPropertyChanged(nameof(ShowStopTransferButton));
                 CommandManager.InvalidateRequerySuggested();
+            }
         }
     }
 
@@ -302,6 +311,7 @@ public class MainViewModel : ViewModelBase
             if (SetProperty(ref _isAutoCloseCountdownActive, value))
             {
                 OnPropertyChanged(nameof(TransferPrimaryButtonText));
+                OnPropertyChanged(nameof(ShowStopTransferButton));
                 CommandManager.InvalidateRequerySuggested();
             }
         }
@@ -330,6 +340,7 @@ public class MainViewModel : ViewModelBase
             if (SetProperty(ref _isAutoStartCountdownActive, value))
             {
                 OnPropertyChanged(nameof(TransferPrimaryButtonText));
+                OnPropertyChanged(nameof(ShowStopTransferButton));
                 CommandManager.InvalidateRequerySuggested();
             }
         }
@@ -404,6 +415,19 @@ public class MainViewModel : ViewModelBase
 
         if (TransferMode == TransferMode.Continuous)
         {
+            if (_isClosing)
+                return;
+
+            var delay = ParseAutoRunDelay();
+            if (delay > 0)
+            {
+                if (!await StartAutoStartCountdownAsync(delay))
+                    return;
+            }
+
+            if (_isClosing || TransferMode != TransferMode.Continuous)
+                return;
+
             StartContinuousMode();
             return;
         }
@@ -622,8 +646,16 @@ public class MainViewModel : ViewModelBase
         }
         catch (TaskCanceledException)
         {
-            StatusText = "Auto-start cancelled";
-            AppendLog("Auto-start transfer cancelled.");
+            if (TransferMode == TransferMode.Continuous)
+            {
+                AppendLog("Continuous mode startup cancelled.");
+                StopContinuousMode();
+            }
+            else
+            {
+                StatusText = "Auto-start cancelled";
+                AppendLog("Auto-start transfer cancelled.");
+            }
             return false;
         }
         finally
@@ -1030,16 +1062,26 @@ public class MainViewModel : ViewModelBase
             _ = StartAutoCloseAsync();
     }
 
+    private void StopTransfer(bool resetContinuousToNone)
+    {
+        _transferCts?.Cancel();
+        if (resetContinuousToNone)
+            StopContinuousMode();
+        else if (!_isClosing)
+            StatusText = "Stopping transfer...";
+    }
+
     private void StartContinuousMode()
     {
         StopContinuousLoopOnly();
         CancelAutoClose();
-        CancelAutoStart();
 
         _continuousCts = new CancellationTokenSource();
         var token = _continuousCts.Token;
         StatusText = "Continuous transfer mode";
         AppendLog("Continuous auto-transfer mode started.");
+        OnPropertyChanged(nameof(ShowStopTransferButton));
+        CommandManager.InvalidateRequerySuggested();
         _ = RunContinuousLoopAsync(token);
     }
 
@@ -1061,6 +1103,7 @@ public class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsTransferModeAutoStart));
                 OnPropertyChanged(nameof(IsTransferModeContinuous));
                 OnPropertyChanged(nameof(IsContinuousMode));
+                OnPropertyChanged(nameof(ShowStopTransferButton));
             }
             finally
             {

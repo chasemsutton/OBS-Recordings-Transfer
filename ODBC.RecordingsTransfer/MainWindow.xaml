@@ -136,19 +136,22 @@
                         BorderBrush="#E0E0E0" BorderThickness="1" MinWidth="0"
                         HorizontalAlignment="Stretch">
                     <StackPanel HorizontalAlignment="Center">
-                        <UniformGrid Columns="3" Margin="0,0,0,10" HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <RadioButton Content="None" GroupName="TransferMode"
-                                         IsChecked="{Binding IsTransferModeNone}" Margin="6,0"
+                                         IsChecked="{Binding IsTransferModeNone}"
+                                         Margin="0,0,20,0" Padding="0"
                                          VerticalContentAlignment="Center"/>
                             <RadioButton Content="Auto-start" GroupName="TransferMode"
-                                         IsChecked="{Binding IsTransferModeAutoStart}" Margin="6,0"
+                                         IsChecked="{Binding IsTransferModeAutoStart}"
+                                         Margin="0,0,20,0" Padding="0"
                                          VerticalContentAlignment="Center"
                                          ToolTip="Run a transfer automatically after the startup delay in Settings."/>
                             <RadioButton Content="Continuous" GroupName="TransferMode"
-                                         IsChecked="{Binding IsTransferModeContinuous}" Margin="6,0"
+                                         IsChecked="{Binding IsTransferModeContinuous}"
+                                         Margin="0" Padding="0"
                                          VerticalContentAlignment="Center"
                                          ToolTip="Keep transferring MP4 files as they become remux-ready."/>
-                        </UniformGrid>
+                        </StackPanel>
 
                         <WrapPanel HorizontalAlignment="Center">
                         <StackPanel Margin="0,0,8,0" HorizontalAlignment="Center">
@@ -160,7 +163,7 @@
                             </StackPanel>
                             <Button Command="{Binding TransferPrimaryCommand}"
                                     FontWeight="SemiBold" Padding="20,6" Foreground="White" BorderThickness="0" Cursor="Hand"
-                                    HorizontalAlignment="Center">
+                                    HorizontalAlignment="Center" MinWidth="128" MinHeight="34">
                                 <Button.Style>
                                     <Style TargetType="Button">
                                         <Setter Property="Background" Value="#2B579A"/>
@@ -169,17 +172,17 @@
                                                 <Setter Property="Background" Value="#B33A3A"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
-                                                <Setter Property="Background" Value="#B33A3A"/>
+                                                <Setter Property="Background" Value="#E6A817"/>
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsContinuousMode}" Value="True">
+                                            <DataTrigger Binding="{Binding ShowStopTransferButton}" Value="True">
                                                 <Setter Property="Background" Value="#B33A3A"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
-                                <Grid HorizontalAlignment="Center">
+                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="88" MinHeight="22">
                                     <TextBlock Text="Run Transfer" FontWeight="SemiBold" Foreground="White" Margin="0"
-                                               HorizontalAlignment="Center">
+                                               HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Visibility" Value="Visible"/>
@@ -190,7 +193,7 @@
                                                     <DataTrigger Binding="{Binding IsAutoCloseCountdownActive}" Value="True">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                     </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsContinuousMode}" Value="True">
+                                                    <DataTrigger Binding="{Binding ShowStopTransferButton}" Value="True">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -198,18 +201,18 @@
                                         </TextBlock.Style>
                                     </TextBlock>
                                     <TextBlock Text="Cancel" FontWeight="SemiBold" Foreground="White" Margin="0"
-                                               HorizontalAlignment="Center"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
                                                Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"/>
-                                    <StackPanel HorizontalAlignment="Center"
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                                                 Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock Text="Cancel" FontWeight="SemiBold" Foreground="White"
-                                                   TextAlignment="Center" Margin="0"/>
-                                        <TextBlock Text="(keep open)" FontSize="11" Foreground="White"
-                                                   TextAlignment="Center" Margin="0"/>
+                                        <TextBlock Text="Cancel" FontWeight="SemiBold" FontSize="12" Foreground="#1A1A1A"
+                                                   TextAlignment="Center" Margin="0" LineHeight="14"/>
+                                        <TextBlock Text="(keep open)" FontSize="9" Foreground="#1A1A1A"
+                                                   TextAlignment="Center" Margin="0" LineHeight="11"/>
                                     </StackPanel>
-                                    <TextBlock Text="Stop Transferring" FontWeight="SemiBold" Foreground="White" Margin="0"
-                                               HorizontalAlignment="Center"
-                                               Visibility="{Binding IsContinuousMode, Converter={StaticResource BoolToVis}}"/>
+                                    <TextBlock Text="Stop Transfer" FontWeight="SemiBold" Foreground="White" Margin="0"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Visibility="{Binding ShowStopTransferButton, Converter={StaticResource BoolToVis}}"/>
                                 </Grid>
                             </Button>
                             <TextBlock Text="{Binding StatusText}" HorizontalAlignment="Center"
