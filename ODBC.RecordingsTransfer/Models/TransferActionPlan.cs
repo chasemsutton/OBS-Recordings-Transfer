@@ -4,7 +4,8 @@ public enum TransferActionType
 {
     Move,
     Delete,
-    Skip
+    Skip,
+    WaitingRemux
 }
 
 public enum TransferActionStatus
@@ -19,8 +20,10 @@ public enum TransferActionStatus
 public class TransferActionPlan
 {
     public string FileName { get; init; } = "";
+    public string? SourcePath { get; init; }
     public TransferActionType ActionType { get; init; }
     public string Description { get; init; } = "";
+    public RemuxReadiness RemuxReadiness { get; init; } = RemuxReadiness.Ready;
 }
 
 public class TransferProgressUpdate

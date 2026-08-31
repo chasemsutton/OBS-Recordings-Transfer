@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
 using ODBC.RecordingsTransfer.Models;
 
 namespace ODBC.RecordingsTransfer.Services;
@@ -11,28 +12,47 @@ public class TransferService
     private const string Mp4Extension = ".mp4";
     private const string MkvExtension = ".mkv";
     private const int CopyBufferSize = 81920;
+    private static readonly TimeSpan RemuxPollInterval = TimeSpan.FromSeconds(1);
 
     private readonly LoggingService _logger;
+    private readonly RemuxFileTracker _remuxTracker = new();
 
     public TransferService(LoggingService logger)
     {
         _logger = logger;
     }
 
+    public RemuxFileTracker RemuxTracker => _remuxTracker;
+
     public List<TransferActionPlan> BuildPlan(AppSettings settings)
     {
         var plan = new List<TransferActionPlan>();
 
         if (string.IsNullOrWhiteSpace(settings.SourcePath) || string.IsNullOrWhiteSpace(settings.DestinationPath))
+        {
+            _remuxTracker.InvalidateCache();
             return plan;
+        }
 
         try
         {
             if (!Directory.Exists(settings.SourcePath) || !Directory.Exists(settings.DestinationPath))
+            {
+                _remuxTracker.InvalidateCache();
                 return plan;
+            }
 
             var sourceFiles = Directory.GetFiles(settings.SourcePath);
             var targetFiles = Directory.GetFiles(settings.DestinationPath);
+            var fingerprint = RemuxFileTracker.BuildFingerprint(sourceFiles, targetFiles);
+
+            if (_remuxTracker.TryGetCachedPlan(fingerprint, out var cached) && cached != null)
+            {
+                var refreshed = RefreshWaitingRemuxItems(cached, settings);
+                _remuxTracker.StoreCachedPlan(fingerprint, refreshed);
+                return refreshed;
+            }
+
             var sourceNames = sourceFiles.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase)!;
             var targetNames = targetFiles.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase)!;
 
@@ -43,6 +63,8 @@ public class TransferService
                 .Where(f => string.Equals(Path.GetExtension(f), MkvExtension, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
+            _remuxTracker.PruneMissing(mp4Files);
+
             var dataToDelete = CalculateSpaceNeeded(settings, sourceFiles);
 
             foreach (var mp4 in mp4Files)
@@ -50,13 +72,52 @@ public class TransferService
 
             foreach (var mkv in mkvFiles)
                 AddMkvPlanItem(mkv, settings, sourceNames, targetNames, dataToDelete, plan);
+
+            _remuxTracker.StoreCachedPlan(fingerprint, plan);
         }
         catch
         {
+            _remuxTracker.InvalidateCache();
             // Blank, missing, inaccessible, or invalid paths should leave the queue empty, not crash.
         }
 
         return plan;
+    }
+
+    private List<TransferActionPlan> RefreshWaitingRemuxItems(List<TransferActionPlan> cached, AppSettings settings)
+    {
+        if (!cached.Any(p => p.ActionType == TransferActionType.WaitingRemux || p.RemuxReadiness == RemuxReadiness.Waiting))
+            return cached;
+
+        var changed = false;
+        var updated = new List<TransferActionPlan>(cached.Count);
+
+        foreach (var item in cached)
+        {
+            if (item.ActionType is not (TransferActionType.WaitingRemux or TransferActionType.Move)
+                || string.IsNullOrEmpty(item.SourcePath)
+                || !settings.CheckRemuxComplete)
+            {
+                updated.Add(item);
+                continue;
+            }
+
+            if (!File.Exists(item.SourcePath))
+            {
+                changed = true;
+                continue;
+            }
+
+            var readiness = _remuxTracker.Evaluate(item.SourcePath, settings.CheckRemuxComplete);
+            var next = CreateMp4PlanItem(item.SourcePath, item.FileName, readiness);
+            if (next.ActionType != item.ActionType
+                || next.RemuxReadiness != item.RemuxReadiness
+                || !string.Equals(next.Description, item.Description, StringComparison.Ordinal))
+                changed = true;
+            updated.Add(next);
+        }
+
+        return changed ? updated : cached;
     }
 
     public TransferResult Run(
@@ -89,6 +150,7 @@ public class TransferService
                 return result;
             }
 
+            _remuxTracker.InvalidateCache();
             var plan = BuildPlan(settings);
             foreach (var item in plan)
                 result.Detected.Add(item.FileName);
@@ -107,13 +169,64 @@ public class TransferService
 
             var dataToDelete = CalculateSpaceNeeded(settings, sourceFiles);
 
+            var readyMp4s = new List<string>();
+            var waitingMp4s = new List<string>();
+
             foreach (var mp4 in mp4Files)
+            {
+                var fileName = Path.GetFileName(mp4)!;
+                if (targetNames.Contains(fileName))
+                {
+                    ProcessMp4(mp4, settings, targetNames, result, context, Report);
+                    continue;
+                }
+
+                var readiness = settings.CheckRemuxComplete
+                    ? _remuxTracker.Evaluate(mp4, true)
+                    : RemuxReadiness.Ready;
+
+                switch (readiness)
+                {
+                    case RemuxReadiness.Ready:
+                        readyMp4s.Add(mp4);
+                        break;
+                    case RemuxReadiness.Waiting:
+                        waitingMp4s.Add(mp4);
+                        break;
+                    case RemuxReadiness.Incomplete:
+                        NotifyIncomplete(context, fileName);
+                        result.Left.Add(fileName);
+                        Report(new TransferProgressUpdate
+                        {
+                            Kind = TransferProgressUpdateKind.Skipped,
+                            FileName = fileName,
+                            ActionType = TransferActionType.Skip,
+                            Message = $"Skip (remux incomplete): {fileName}"
+                        });
+                        break;
+                }
+            }
+
+            foreach (var mp4 in readyMp4s)
                 ProcessMp4(mp4, settings, targetNames, result, context, Report);
+
+            foreach (var mp4 in waitingMp4s)
+            {
+                var fileName = Path.GetFileName(mp4)!;
+                if (!WaitForRemuxReady(mp4, settings, context, Report))
+                {
+                    result.Left.Add(fileName);
+                    continue;
+                }
+
+                ProcessMp4(mp4, settings, targetNames, result, context, Report);
+            }
 
             foreach (var mkv in mkvFiles)
                 ProcessMkv(mkv, settings, sourceNames, targetNames, dataToDelete, result, Report);
 
             result.Success = result.Errors.Count == 0;
+            _remuxTracker.InvalidateCache();
         }
         catch (Exception ex)
         {
@@ -125,7 +238,82 @@ public class TransferService
         return result;
     }
 
-    private static void AddMp4PlanItem(
+    private bool WaitForRemuxReady(
+        string sourceFile,
+        AppSettings settings,
+        TransferContext? context,
+        Action<TransferProgressUpdate> report)
+    {
+        var fileName = Path.GetFileName(sourceFile)!;
+        report(new TransferProgressUpdate
+        {
+            Kind = TransferProgressUpdateKind.Start,
+            FileName = fileName,
+            ActionType = TransferActionType.WaitingRemux,
+            Progress = 0,
+            Message = $"Waiting for remux: {fileName}"
+        });
+
+        while (true)
+        {
+            if (!File.Exists(sourceFile))
+            {
+                report(new TransferProgressUpdate
+                {
+                    Kind = TransferProgressUpdateKind.Failed,
+                    FileName = fileName,
+                    ActionType = TransferActionType.WaitingRemux,
+                    Message = $"File disappeared while waiting: {fileName}"
+                });
+                return false;
+            }
+
+            var readiness = _remuxTracker.Evaluate(sourceFile, settings.CheckRemuxComplete);
+            if (readiness == RemuxReadiness.Ready)
+            {
+                report(new TransferProgressUpdate
+                {
+                    Kind = TransferProgressUpdateKind.Log,
+                    FileName = fileName,
+                    Message = $"Remux ready: {fileName}"
+                });
+                return true;
+            }
+
+            if (readiness == RemuxReadiness.Incomplete)
+            {
+                NotifyIncomplete(context, fileName);
+                report(new TransferProgressUpdate
+                {
+                    Kind = TransferProgressUpdateKind.Skipped,
+                    FileName = fileName,
+                    ActionType = TransferActionType.Skip,
+                    Message = $"Skip (remux incomplete): {fileName}"
+                });
+                return false;
+            }
+
+            report(new TransferProgressUpdate
+            {
+                Kind = TransferProgressUpdateKind.Progress,
+                FileName = fileName,
+                ActionType = TransferActionType.WaitingRemux,
+                Progress = 0,
+                Message = "Waiting for remux..."
+            });
+
+            Thread.Sleep(RemuxPollInterval);
+        }
+    }
+
+    private void NotifyIncomplete(TransferContext? context, string fileName)
+    {
+        if (!_remuxTracker.TryMarkIncompleteAlert(fileName))
+            return;
+        context?.NotifyRemuxIncomplete?.Invoke(fileName);
+    }
+
+    private void AddMp4PlanItem(
         string sourceFile,
         AppSettings settings,
         HashSet<string?> targetNames,
@@ -138,18 +326,46 @@ public class TransferService
             plan.Add(new TransferActionPlan
             {
                 FileName = fileName,
+                SourcePath = sourceFile,
                 ActionType = TransferActionType.Skip,
                 Description = $"Skip (already at destination): {fileName}"
             });
             return;
         }
 
-        plan.Add(new TransferActionPlan
+        var readiness = _remuxTracker.Evaluate(sourceFile, settings.CheckRemuxComplete);
+        plan.Add(CreateMp4PlanItem(sourceFile, fileName, readiness));
+    }
+
+    private static TransferActionPlan CreateMp4PlanItem(string sourceFile, string fileName, RemuxReadiness readiness)
+    {
+        return readiness switch
         {
-            FileName = fileName,
-            ActionType = TransferActionType.Move,
-            Description = $"Move: {fileName}"
-        });
+            RemuxReadiness.Waiting => new TransferActionPlan
+            {
+                FileName = fileName,
+                SourcePath = sourceFile,
+                ActionType = TransferActionType.WaitingRemux,
+                RemuxReadiness = RemuxReadiness.Waiting,
+                Description = $"Waiting for remux: {fileName}"
+            },
+            RemuxReadiness.Incomplete => new TransferActionPlan
+            {
+                FileName = fileName,
+                SourcePath = sourceFile,
+                ActionType = TransferActionType.Skip,
+                RemuxReadiness = RemuxReadiness.Incomplete,
+                Description = $"Skip (remux incomplete): {fileName}"
+            },
+            _ => new TransferActionPlan
+            {
+                FileName = fileName,
+                SourcePath = sourceFile,
+                ActionType = TransferActionType.Move,
+                RemuxReadiness = RemuxReadiness.Ready,
+                Description = $"Move: {fileName}"
+            }
+        };
     }
 
     private static void AddMkvPlanItem(
@@ -188,6 +404,7 @@ public class TransferService
         plan.Add(new TransferActionPlan
         {
             FileName = fileName,
+            SourcePath = sourceFile,
             ActionType = TransferActionType.Delete,
             Description = $"Delete old MKV: {fileName}"
         });

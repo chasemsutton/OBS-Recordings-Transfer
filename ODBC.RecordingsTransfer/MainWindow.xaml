@@ -66,6 +66,10 @@
                                         <Setter Property="Text" Value="○"/>
                                         <Setter Property="Foreground" Value="#AAAAAA"/>
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding ActionType}" Value="{x:Static models:TransferActionType.WaitingRemux}">
+                                        <Setter Property="Text" Value="…"/>
+                                        <Setter Property="Foreground" Value="#C47D00"/>
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </TextBlock.Style>
@@ -243,10 +247,10 @@
                             </StackPanel>
                         </WrapPanel>
 
-                        <WrapPanel Margin="0,4,0,0">
-                            <CheckBox Content="Verify Transfer (MD5)" IsChecked="{Binding VerifyTransfer}"/>
-                            <CheckBox Content="Verify Remux (FFmpeg)" IsChecked="{Binding VerifyRemux}"/>
-                        </WrapPanel>
+                        <CheckBox Content="Wait for remux to finish before moving MP4s"
+                                  IsChecked="{Binding CheckRemuxComplete}"
+                                  Margin="0,4,0,8"
+                                  ToolTip="Detects OBS remux completion (stable file size + moov atom). Turn off for non-OBS remuxers."/>
 
                         <WrapPanel Margin="0,4,0,0">
                             <CheckBox Content="Auto-start transfer on startup" IsChecked="{Binding AutoRunOnStartup}"
@@ -272,8 +276,16 @@
 
                         <CheckBox Content="Don't warn when destination folder year doesn't match current year"
                                   IsChecked="{Binding SkipDestinationYearWarning}"
-                                  Margin="0,8,0,0"
+                                  Margin="0,8,0,8"
                                   ToolTip="When checked, the year mismatch prompt is skipped. Uncheck to show the warning again."/>
+
+                        <Expander Header="Advanced" IsExpanded="False" Margin="0,4,0,0">
+                            <StackPanel Margin="0,8,0,0">
+                                <CheckBox Content="Verify Transfer (MD5)" IsChecked="{Binding VerifyTransfer}"/>
+                                <CheckBox Content="Verify Remux (FFmpeg)" IsChecked="{Binding VerifyRemux}"
+                                          ToolTip="Full FFmpeg decode check at transfer time (slower). Separate from the lightweight remux wait above."/>
+                            </StackPanel>
+                        </Expander>
                     </StackPanel>
                 </ScrollViewer>
             </Border>

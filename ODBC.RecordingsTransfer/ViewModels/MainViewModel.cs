@@ -24,6 +24,7 @@ public class MainViewModel : ViewModelBase
         nameof(AutoCloseSeconds),
         nameof(VerifyTransfer),
         nameof(VerifyRemux),
+        nameof(CheckRemuxComplete),
         nameof(AutoRunOnStartup),
         nameof(AutoRunDelayText),
         nameof(CheckForUpdatesOnStartup),
@@ -37,7 +38,8 @@ public class MainViewModel : ViewModelBase
         nameof(SourcePath),
         nameof(DestinationPath),
         nameof(MaxFileAgeDays),
-        nameof(MinFreeSpaceGb)
+        nameof(MinFreeSpaceGb),
+        nameof(CheckRemuxComplete)
     };
 
     private readonly ConfigService _configService;
@@ -50,7 +52,7 @@ public class MainViewModel : ViewModelBase
     private CancellationTokenSource? _queueRefreshDebounceCts;
     private bool _isClosing;
     private int _queueRefreshRunning;
-    private const int QueueRefreshIntervalMs = 10000;
+    private const int QueueRefreshIntervalMs = 3000;
 
     private string _sourcePath = "";
     private string _destinationPath = "";
@@ -59,6 +61,7 @@ public class MainViewModel : ViewModelBase
     private int _autoCloseSeconds = 15;
     private bool _verifyTransfer;
     private bool _verifyRemux;
+    private bool _checkRemuxComplete = true;
     private bool _autoRunOnStartup;
     private string _autoRunDelayText = "5";
     private bool _checkForUpdatesOnStartup = true;
@@ -174,6 +177,16 @@ public class MainViewModel : ViewModelBase
     {
         get => _verifyRemux;
         set => SetProperty(ref _verifyRemux, value);
+    }
+
+    public bool CheckRemuxComplete
+    {
+        get => _checkRemuxComplete;
+        set
+        {
+            if (SetProperty(ref _checkRemuxComplete, value))
+                _transferService.RemuxTracker.InvalidateCache();
+        }
     }
 
     public bool AutoRunOnStartup
@@ -433,10 +446,24 @@ public class MainViewModel : ViewModelBase
                 return;
 
             ApplyPlanToQueue(plan, logToActivity);
+            ShowRemuxIncompleteAlerts();
         }
         finally
         {
             Interlocked.Exchange(ref _queueRefreshRunning, 0);
+        }
+    }
+
+    private void ShowRemuxIncompleteAlerts()
+    {
+        foreach (var fileName in _transferService.RemuxTracker.ConsumeIncompleteAlerts())
+        {
+            AppendLog($"Remux incomplete — will not move: {fileName}");
+            System.Windows.MessageBox.Show(
+                $"\"{fileName}\" looks finished growing but is missing a remux index (moov).\n\nThis file will not be moved.",
+                "Remux Incomplete",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
     }
 
@@ -549,6 +576,7 @@ public class MainViewModel : ViewModelBase
             AutoCloseSeconds = settings.AutoCloseSeconds;
             VerifyTransfer = settings.VerifyTransfer;
             VerifyRemux = settings.VerifyRemux;
+            CheckRemuxComplete = settings.CheckRemuxComplete;
             AutoRunOnStartup = settings.AutoRunOnStartup;
             AutoRunDelayText = settings.AutoRunDelaySeconds.ToString();
             CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
@@ -613,6 +641,7 @@ public class MainViewModel : ViewModelBase
         AutoCloseSeconds = AutoCloseSeconds,
         VerifyTransfer = VerifyTransfer,
         VerifyRemux = VerifyRemux,
+        CheckRemuxComplete = CheckRemuxComplete,
         AutoRunOnStartup = AutoRunOnStartup,
         AutoRunDelaySeconds = ParseAutoRunDelay(),
         CheckForUpdatesOnStartup = CheckForUpdatesOnStartup,
@@ -796,6 +825,18 @@ public class MainViewModel : ViewModelBase
                         MessageBoxImage.Warning);
                 });
                 return result == MessageBoxResult.Yes;
+            },
+            NotifyRemuxIncomplete = fileName =>
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    AppendLog($"Remux incomplete — will not move: {fileName}");
+                    System.Windows.MessageBox.Show(
+                        $"\"{fileName}\" looks finished growing but is missing a remux index (moov).\n\nThis file will not be moved.",
+                        "Remux Incomplete",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                });
             }
         };
 

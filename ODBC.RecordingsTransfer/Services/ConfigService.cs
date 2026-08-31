@@ -34,6 +34,7 @@ public class ConfigService
         settings.AutoCloseSeconds = int.Parse(ReadValue(lines, "Auto Close Timer (seconds)", settings.AutoCloseSeconds.ToString()));
         settings.VerifyTransfer = bool.Parse(ReadValue(lines, "Verify Transfer", settings.VerifyTransfer.ToString()));
         settings.VerifyRemux = bool.Parse(ReadValue(lines, "Verify Remux", settings.VerifyRemux.ToString()));
+        settings.CheckRemuxComplete = bool.Parse(ReadValue(lines, "Check Remux Complete", settings.CheckRemuxComplete.ToString()));
         settings.AutoRunOnStartup = bool.Parse(ReadValue(lines, "Begin Transfer On Startup", settings.AutoRunOnStartup.ToString()));
         settings.AutoRunDelaySeconds = ParseDelay(ReadValue(lines, "Auto Start Delay (seconds)", settings.AutoRunDelaySeconds.ToString()));
         settings.CheckForUpdatesOnStartup = bool.Parse(ReadValue(lines, "Check For Updates On Startup", settings.CheckForUpdatesOnStartup.ToString()));
@@ -61,6 +62,7 @@ public class ConfigService
             $"Auto Close Timer (seconds): \"{settings.AutoCloseSeconds}\"",
             $"Verify Transfer: \"{settings.VerifyTransfer}\"",
             $"Verify Remux: \"{settings.VerifyRemux}\"",
+            $"Check Remux Complete: \"{settings.CheckRemuxComplete}\"",
             $"Begin Transfer On Startup: \"{settings.AutoRunOnStartup}\"",
             $"Auto Start Delay (seconds): \"{settings.AutoRunDelaySeconds}\"",
             $"Check For Updates On Startup: \"{settings.CheckForUpdatesOnStartup}\"",

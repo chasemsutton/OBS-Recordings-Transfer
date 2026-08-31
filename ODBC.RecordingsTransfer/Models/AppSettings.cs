@@ -9,6 +9,8 @@ public class AppSettings
     public int AutoCloseSeconds { get; set; } = 15;
     public bool VerifyTransfer { get; set; } = false;
     public bool VerifyRemux { get; set; } = false;
+    /// <summary>When true, wait for OBS-style remux (stable size + moov) before moving MP4s.</summary>
+    public bool CheckRemuxComplete { get; set; } = true;
     public bool AutoRunOnStartup { get; set; } = false;
     public int AutoRunDelaySeconds { get; set; } = 5;
     public bool CheckForUpdatesOnStartup { get; set; } = true;
