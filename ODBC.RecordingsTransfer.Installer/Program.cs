@@ -10,7 +10,7 @@ internal static class Program
 {
     private const string AppName = "ODBC Recordings Transfer";
     private const string ExeName = "ODBC Recordings Transfer.exe";
-    private const string Version = "2.0.2";
+    private const string Version = "2.0.3";
     private const string Publisher = "Open Door Baptist Church";
     private const string UninstallKeyName = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8F4E2A91-6C3D-4B7E-9F1A-2D5E8C0B4A73}";
 
@@ -75,14 +75,13 @@ internal static class Program
             WriteDefaultConfig(installDir);
             RegisterUninstall(installDir);
 
-            var launch = MessageBox.Show(
-                $"{AppName} was installed successfully.\n\nLocation:\n{installDir}\n\nLaunch the app now?",
+            MessageBox.Show(
+                $"{AppName} was installed successfully.\n\n" +
+                $"Open it from the Start Menu to get started.\n\n" +
+                $"Location:\n{installDir}",
                 AppName,
-                MessageBoxButtons.YesNo,
+                MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
-
-            if (launch == DialogResult.Yes)
-                TryLaunchApp(exePath, installDir);
 
             return 0;
         }
@@ -94,35 +93,6 @@ internal static class Program
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             return 1;
-        }
-    }
-
-    private static void TryLaunchApp(string exePath, string installDir)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo(exePath)
-            {
-                UseShellExecute = true,
-                WorkingDirectory = installDir
-            });
-        }
-        catch (Exception ex)
-        {
-            var blockedByPolicy = ex.Message.Contains("Application Control", StringComparison.OrdinalIgnoreCase)
-                || ex.Message.Contains("blocked", StringComparison.OrdinalIgnoreCase);
-
-            var message = blockedByPolicy
-                ? $"{AppName} was installed successfully, but Windows blocked it from starting.\n\n" +
-                  $"This PC has an Application Control policy (AppLocker, WDAC, or Smart App Control) " +
-                  $"that blocks unsigned apps.\n\n" +
-                  $"Ask your IT admin to allow this app, or launch it from the Start Menu after it has been approved:\n{exePath}\n\n" +
-                  $"Technical detail: {ex.Message}"
-                : $"{AppName} was installed successfully, but could not be launched automatically.\n\n" +
-                  $"Open it from the Start Menu, or run:\n{exePath}\n\n" +
-                  $"Error: {ex.Message}";
-
-            MessageBox.Show(message, AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
