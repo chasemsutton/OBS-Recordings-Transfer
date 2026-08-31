@@ -245,6 +245,20 @@ public class TransferService
             Message = $"Copying: {fileName}"
         });
 
+        if (settings.VerifyRemux)
+        {
+            report(new TransferProgressUpdate
+            {
+                Kind = TransferProgressUpdateKind.Progress,
+                FileName = fileName,
+                ActionType = TransferActionType.Move,
+                Progress = 0,
+                TotalBytes = fileSize,
+                BytesTransferred = 0,
+                Message = "Validating remux..."
+            });
+        }
+
         if (settings.VerifyRemux && !IsRemuxComplete(sourceFile, message => report(new TransferProgressUpdate
         {
             Kind = TransferProgressUpdateKind.Log,
@@ -285,6 +299,14 @@ public class TransferService
 
                 if (settings.VerifyTransfer)
                 {
+                    report(new TransferProgressUpdate
+                    {
+                        Kind = TransferProgressUpdateKind.Progress,
+                        FileName = fileName,
+                        ActionType = TransferActionType.Move,
+                        Progress = 1,
+                        Message = "Verifying..."
+                    });
                     report(new TransferProgressUpdate
                     {
                         Kind = TransferProgressUpdateKind.Log,
@@ -331,6 +353,14 @@ public class TransferService
                     });
                 }
 
+                report(new TransferProgressUpdate
+                {
+                    Kind = TransferProgressUpdateKind.Progress,
+                    FileName = fileName,
+                    ActionType = TransferActionType.Move,
+                    Progress = 1,
+                    Message = "Removing original..."
+                });
                 File.Delete(sourceFile);
                 result.Moved.Add(fileName);
                 targetNames.Add(fileName);
@@ -440,20 +470,33 @@ public class TransferService
     {
         var length = new FileInfo(source).Length;
         long copied = 0;
+        var lastReport = Stopwatch.StartNew();
 
-        using var input = File.OpenRead(source);
-        using var output = File.Create(destination);
+        void Report(bool force)
+        {
+            if (force || lastReport.ElapsedMilliseconds >= 50)
+            {
+                reportBytes(copied, length);
+                lastReport.Restart();
+            }
+        }
+
+        using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, FileOptions.SequentialScan);
+        using var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferSize, FileOptions.SequentialScan);
         var buffer = new byte[CopyBufferSize];
 
-        reportBytes(0, length);
+        Report(true);
 
         int read;
         while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
         {
             output.Write(buffer, 0, read);
             copied += read;
-            reportBytes(copied, length);
+            Report(false);
         }
+
+        output.Flush(true);
+        Report(true);
     }
 
     private static bool IsRemuxComplete(string sourceFile, Action<string> report)

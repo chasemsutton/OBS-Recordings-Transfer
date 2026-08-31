@@ -773,9 +773,13 @@ public class MainViewModel : ViewModelBase
         foreach (var item in TransferItems)
             itemLookup[item.FileName] = item;
 
+        var dispatcher = System.Windows.Application.Current.Dispatcher;
         var progress = new Progress<TransferProgressUpdate>(update =>
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() => HandleTransferUpdate(update, itemLookup));
+            if (dispatcher.CheckAccess())
+                HandleTransferUpdate(update, itemLookup);
+            else
+                dispatcher.BeginInvoke(() => HandleTransferUpdate(update, itemLookup));
         });
 
         var context = new TransferContext
@@ -858,8 +862,9 @@ public class MainViewModel : ViewModelBase
             case TransferProgressUpdateKind.Start:
                 item.Status = TransferActionStatus.InProgress;
                 item.Progress = 0;
-                if (update.TotalBytes > 0)
-                    item.ProgressText = FileSizeFormatter.FormatProgress(0, update.TotalBytes);
+                item.ProgressText = update.TotalBytes > 0
+                    ? FileSizeFormatter.FormatProgress(0, update.TotalBytes)
+                    : update.Message ?? "";
                 if (!string.IsNullOrWhiteSpace(update.Message))
                     AppendLog(update.Message);
                 break;
@@ -867,7 +872,9 @@ public class MainViewModel : ViewModelBase
             case TransferProgressUpdateKind.Progress:
                 item.Status = TransferActionStatus.InProgress;
                 item.Progress = update.Progress;
-                if (update.TotalBytes > 0)
+                if (!string.IsNullOrWhiteSpace(update.Message))
+                    item.ProgressText = update.Message;
+                else if (update.TotalBytes > 0)
                     item.ProgressText = FileSizeFormatter.FormatProgress(update.BytesTransferred, update.TotalBytes);
                 break;
 

@@ -11,8 +11,6 @@ public partial class MainWindow : Window
     private const double ExpandedWidth = 1040;
     private const double ExpandedMinHeight = 640;
     private const double ExpandedMinWidth = 900;
-    private const double CompactMinHeight = 400;
-    private const double CompactMinWidth = 520;
     private const double CompactColumnWidth = 440;
 
     private readonly MainViewModel _viewModel;
@@ -85,8 +83,8 @@ public partial class MainWindow : Window
         if (!_isCompact)
             CaptureExpandedLayout();
 
-        MinWidth = CompactMinWidth;
-        MinHeight = CompactMinHeight;
+        MinWidth = 1;
+        MinHeight = 1;
 
         if (WindowState != WindowState.Normal)
             WindowState = WindowState.Normal;
@@ -155,7 +153,7 @@ public partial class MainWindow : Window
         if (ActualWidth <= 0 || ActualHeight <= 0)
             return;
 
-        MinWidth = Math.Max(CompactMinWidth, ActualWidth);
-        MinHeight = Math.Max(CompactMinHeight, ActualHeight);
+        MinWidth = ActualWidth;
+        MinHeight = ActualHeight;
     }
 }

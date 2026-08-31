@@ -16,7 +16,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <Style TargetType="Button">
             <Setter Property="Padding" Value="12,6"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Margin" Value="4,0"/>
             <Setter Property="Background" Value="#2B579A"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -79,7 +79,12 @@
                             </Style.Triggers>
                         </Style>
                     </Grid.Style>
-                    <ProgressBar Height="14" Minimum="0" Maximum="1" Value="{Binding Progress}"/>
+                    <ProgressBar Height="14" Minimum="0" Maximum="1" Value="{Binding Progress}"
+                                 IsIndeterminate="False">
+                        <ProgressBar.Foreground>
+                            <SolidColorBrush Color="#2B579A"/>
+                        </ProgressBar.Foreground>
+                    </ProgressBar>
                     <TextBlock Text="{Binding ProgressText}"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
@@ -91,7 +96,7 @@
         </DataTemplate>
     </Window.Resources>
 
-    <Grid Margin="20">
+    <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition x:Name="MainBodyRow" Height="Auto"/>
             <RowDefinition x:Name="ActivityLogRow" Height="*"/>
@@ -109,16 +114,17 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="220"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Margin="0,0,0,16">
-                    <TextBlock Text="ODBC Recordings Transfer" FontSize="24" FontWeight="SemiBold" Foreground="#1A1A1A" Margin="0,0,0,4"/>
-                </StackPanel>
+                <TextBlock Grid.Row="0" Text="ODBC Recordings Transfer"
+                           FontSize="24" FontWeight="SemiBold" Foreground="#1A1A1A"
+                           HorizontalAlignment="Center" TextAlignment="Center"
+                           Margin="0,0,0,12"/>
 
-                <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="12" Margin="0,0,0,12"
+                <Border Grid.Row="1" Background="White" CornerRadius="8" Padding="8,12" Margin="0,0,0,12"
                         BorderBrush="#E0E0E0" BorderThickness="1">
-                    <WrapPanel>
+                    <WrapPanel HorizontalAlignment="Center">
                         <StackPanel Margin="0,0,8,0">
                             <StackPanel Visibility="{Binding IsAutoStartCountdownActive, Converter={StaticResource BoolToVis}}"
                                         Margin="0,0,0,6" MinWidth="200">
@@ -152,7 +158,7 @@
                     </WrapPanel>
                 </Border>
 
-                <DockPanel Grid.Row="2" LastChildFill="True" Margin="4,0,4,12">
+                <DockPanel Grid.Row="2" LastChildFill="True" Margin="0,0,0,12">
                     <TextBlock DockPanel.Dock="Left" Text="Destination"
                                FontSize="11" Foreground="#888888" VerticalAlignment="Center"
                                Margin="0,0,8,0"/>
@@ -165,16 +171,13 @@
 
                 <Border x:Name="TransferQueuePanel" Grid.Row="3" Background="White" CornerRadius="8" Padding="12"
                         BorderBrush="#E0E0E0" BorderThickness="1">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="Transfer Queue" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Transfer Queue" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" TextAlignment="Center" Margin="0,0,0,8"/>
+                        <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
                             <ItemsControl ItemsSource="{Binding TransferItems}"/>
                         </ScrollViewer>
-                    </Grid>
+                    </StackPanel>
                 </Border>
             </Grid>
 
