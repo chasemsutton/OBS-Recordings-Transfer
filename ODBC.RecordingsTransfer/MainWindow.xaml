@@ -93,7 +93,7 @@
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
-            <RowDefinition x:Name="MainBodyRow" Height="2*"/>
+            <RowDefinition x:Name="MainBodyRow" Height="Auto"/>
             <RowDefinition x:Name="ActivityLogRow" Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -104,11 +104,12 @@
                 <ColumnDefinition x:Name="SettingsColumn" Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0">
+            <Grid Grid.Column="0" Width="440" HorizontalAlignment="Left" VerticalAlignment="Top">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="220"/>
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" Margin="0,0,0,16">
@@ -141,8 +142,6 @@
                         </StackPanel>
                         <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"/>
                         <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"/>
-                        <Button Content="Open Log Folder" Command="{Binding OpenLogFolderCommand}" Background="#666666"
-                                Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}"/>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
                             <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                                        FontStyle="Italic" Foreground="#666666"/>
@@ -153,7 +152,20 @@
                     </WrapPanel>
                 </Border>
 
-                <Border x:Name="TransferQueuePanel" Grid.Row="2" Background="White" CornerRadius="8" Padding="12"
+                <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="8,6" Margin="0,0,0,12"
+                        BorderBrush="#E0E0E0" BorderThickness="1">
+                    <DockPanel LastChildFill="True">
+                        <TextBlock DockPanel.Dock="Left" Text="Destination"
+                                   FontSize="11" Foreground="#888888" VerticalAlignment="Center"
+                                   Margin="0,0,8,0"/>
+                        <TextBox Text="{Binding DestinationPath, Mode=OneWay}"
+                                 IsReadOnly="True" FontSize="11" Padding="6,2" Margin="0"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="{Binding DestinationPath}"/>
+                    </DockPanel>
+                </Border>
+
+                <Border x:Name="TransferQueuePanel" Grid.Row="3" Background="White" CornerRadius="8" Padding="12"
                         BorderBrush="#E0E0E0" BorderThickness="1">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -173,9 +185,16 @@
                     Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
-                        <TextBlock Text="Settings" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4"/>
-                        <TextBlock Text="Transfer MP4 recordings and clean up old MKV files"
-                                   FontSize="13" Foreground="#666666" Margin="0,0,0,16"/>
+                        <DockPanel LastChildFill="True" Margin="0,0,0,16">
+                            <Button DockPanel.Dock="Right" Content="Open Log Folder"
+                                    Command="{Binding OpenLogFolderCommand}" Background="#666666"
+                                    VerticalAlignment="Top" Margin="8,0,0,0"/>
+                            <StackPanel>
+                                <TextBlock Text="Settings" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4"/>
+                                <TextBlock Text="Transfer MP4 recordings and clean up old MKV files"
+                                           FontSize="13" Foreground="#666666" Margin="0"/>
+                            </StackPanel>
+                        </DockPanel>
 
                         <TextBlock Text="Source Path"/>
                         <DockPanel LastChildFill="True" Margin="0,0,0,8">

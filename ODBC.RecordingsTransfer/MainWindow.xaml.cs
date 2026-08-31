@@ -11,10 +11,11 @@ public partial class MainWindow : Window
     private const double ExpandedWidth = 1040;
     private const double ExpandedMinHeight = 640;
     private const double ExpandedMinWidth = 900;
-    private const double CompactHeight = 420;
+    private const double CompactHeight = 480;
     private const double CompactWidth = 480;
-    private const double CompactMinHeight = 280;
+    private const double CompactMinHeight = 360;
     private const double CompactMinWidth = 400;
+    private const double CompactColumnWidth = 440;
 
     private readonly MainViewModel _viewModel;
     private double _expandedHeight = ExpandedHeight;
@@ -93,17 +94,17 @@ public partial class MainWindow : Window
         Height = CompactHeight;
         _isCompact = true;
 
-        CompactColumn.Width = new GridLength(1, GridUnitType.Star);
+        CompactColumn.Width = new GridLength(CompactColumnWidth);
         SettingsColumn.Width = new GridLength(0);
-        MainBodyRow.Height = new GridLength(1, GridUnitType.Star);
+        MainBodyRow.Height = GridLength.Auto;
         ActivityLogRow.Height = new GridLength(0);
     }
 
     private void ApplyExpandedLayout()
     {
-        CompactColumn.Width = new GridLength(440);
+        CompactColumn.Width = new GridLength(CompactColumnWidth);
         SettingsColumn.Width = new GridLength(1, GridUnitType.Star);
-        MainBodyRow.Height = new GridLength(2, GridUnitType.Star);
+        MainBodyRow.Height = GridLength.Auto;
         ActivityLogRow.Height = new GridLength(1, GridUnitType.Star);
 
         MinWidth = ExpandedMinWidth;
