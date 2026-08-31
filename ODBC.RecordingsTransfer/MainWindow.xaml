@@ -156,8 +156,6 @@
                                         Visibility="{Binding IsAutoCloseCountdownActive, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </StackPanel>
-                        <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}" Background="#3A6EA5"
-                                VerticalAlignment="Top"/>
                         <Button Content="{Binding SettingsToggleButtonText}" Command="{Binding ToggleSettingsPanelCommand}" Background="#555555"
                                 VerticalAlignment="Top"/>
                     </WrapPanel>
@@ -252,12 +250,14 @@
                         <WrapPanel Margin="0,4,0,0">
                             <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}"
                                       VerticalAlignment="Center"/>
-                            <StackPanel>
+                            <StackPanel Margin="0,0,16,0">
                                 <TextBlock Text="Update channel"/>
                                 <ComboBox ItemsSource="{Binding UpdateChannels}"
                                           SelectedItem="{Binding UpdateChannelName}"
                                           Width="100" Margin="0,0,0,8"/>
                             </StackPanel>
+                            <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}"
+                                    Background="#3A6EA5" VerticalAlignment="Center" Margin="0,0,0,8"/>
                         </WrapPanel>
 
                         <CheckBox Content="Don't warn when destination folder year doesn't match current year"
