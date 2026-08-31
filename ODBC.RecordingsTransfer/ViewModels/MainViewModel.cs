@@ -574,10 +574,11 @@ public class MainViewModel : ViewModelBase
     {
         foreach (var fileName in _transferService.RemuxTracker.ConsumeIncompleteAlerts())
         {
-            AppendLog($"Remux incomplete — will not move: {fileName}");
+            AppendLog($"Remux index (moov) not found yet — still waiting: {fileName}");
             System.Windows.MessageBox.Show(
-                $"\"{fileName}\" looks finished growing but is missing a remux index (moov).\n\nThis file will not be moved.",
-                "Remux Incomplete",
+                $"\"{fileName}\" has had a stable size for a while, but no remux index (moov) has been detected yet.\n\n" +
+                "It will stay as waiting for successful remux. Other ready files will transfer first.",
+                "Remux Not Ready Yet",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
@@ -629,27 +630,47 @@ public class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Updates pending queue rows from a fresh plan without touching in-progress or history items.
-    /// Lets remux-ready files flip to Move while an earlier file is still copying.
+    /// Updates pending queue rows from a fresh plan without touching in-progress progress.
+    /// Also revives premature remux skips so files can flip to Move while an earlier copy runs.
     /// </summary>
     private void UpdatePendingQueueFromPlan(List<TransferActionPlan> plan)
     {
-        var pendingByName = TransferItems
-            .Where(i => i.Status == TransferActionStatus.Pending)
+        var itemsByName = TransferItems
             .GroupBy(i => i.FileName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var planItem in plan)
         {
-            if (!pendingByName.TryGetValue(planItem.FileName, out var item))
+            if (!itemsByName.TryGetValue(planItem.FileName, out var items))
                 continue;
 
-            if (item.ActionType == planItem.ActionType
-                && string.Equals(item.Label, planItem.Description, StringComparison.Ordinal))
-                continue;
+            foreach (var item in items)
+            {
+                if (item.Status == TransferActionStatus.InProgress)
+                    continue;
 
-            item.ActionType = planItem.ActionType;
-            item.Label = planItem.Description;
+                if (item.Status == TransferActionStatus.Skipped
+                    && planItem.ActionType is TransferActionType.Move or TransferActionType.WaitingRemux)
+                {
+                    item.Status = TransferActionStatus.Pending;
+                    item.CompletedAt = null;
+                    item.Progress = 0;
+                    item.ProgressText = "";
+                    item.ActionType = planItem.ActionType;
+                    item.Label = planItem.Description;
+                    continue;
+                }
+
+                if (item.Status != TransferActionStatus.Pending)
+                    continue;
+
+                if (item.ActionType == planItem.ActionType
+                    && string.Equals(item.Label, planItem.Description, StringComparison.Ordinal))
+                    continue;
+
+                item.ActionType = planItem.ActionType;
+                item.Label = planItem.Description;
+            }
         }
     }
 
@@ -1050,12 +1071,13 @@ public class MainViewModel : ViewModelBase
             {
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
-                    AppendLog($"Remux incomplete — will not move: {fileName}");
+                    AppendLog($"Remux index (moov) not found yet — still waiting: {fileName}");
                     if (!fromContinuousLoop)
                     {
                         System.Windows.MessageBox.Show(
-                            $"\"{fileName}\" looks finished growing but is missing a remux index (moov).\n\nThis file will not be moved.",
-                            "Remux Incomplete",
+                            $"\"{fileName}\" has had a stable size for a while, but no remux index (moov) has been detected yet.\n\n" +
+                            "It will stay as waiting for successful remux. Other ready files will transfer first.",
+                            "Remux Not Ready Yet",
                             MessageBoxButton.OK,
                             MessageBoxImage.Warning);
                     }

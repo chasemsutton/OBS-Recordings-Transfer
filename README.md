@@ -1,15 +1,21 @@
-# ODBC Recordings Transfer
+# OBS Recording Transfer
 
-Windows desktop app for Open Door Baptist Church Media Ministry. Transfers MP4 recordings from a source folder to a destination and cleans up old MKV files.
+Windows desktop app for Open Door Baptist Church Media Ministry. Transfers remuxed OBS MP4 recordings from a source folder to a destination and cleans up old MKV files.
 
 ## Features
 
-- GUI for configuring paths and running transfers
-- MP4 transfer with optional MD5 verification
-- Old MKV cleanup when matching MP4 exists
-- Optional FFmpeg remux validation
+- Compact/expandable GUI with transfer queue, live progress, and activity log
+- **Transfer modes** (radios above Run Transfer):
+  - **Manual start** — run only when you click Run Transfer
+  - **Auto-start** — one transfer after launch (delay is in Settings)
+  - **Continuous** — keep transferring remux-ready MP4s; **Stop Transfer** cancels work and returns to Manual start
+- Wait for OBS remux completion (stable size + `moov`) before moving; ready files transfer first while others keep waiting
+- Queue updates while a transfer is running (e.g. waiting → move when remux finishes)
+- Old MKV cleanup when a matching MP4 exists (age / free-space rules)
+- Continuous helpers: start with Windows, start minimized
+- In-app updates via GitHub Releases (Stable channel, or Beta version picker with rollback)
+- Settings organized with Advanced / Unsupported options (MD5 and FFmpeg verify)
 - Self-contained — no separate .NET install required
-- In-app updates via GitHub Releases
 - Windows installer with Add/Remove Programs support
 
 ## Build
@@ -49,19 +55,15 @@ GitHub Actions builds the installer and publishes it to [Releases](https://githu
 When you ship a breaking installer/update-path change, put `update-from: <this version>` on that release (and later ones as needed). When you ship a breaking config/data change that blocks safe downgrade, bump `AppCompatibility.MinCompatibleVersion`.
 
 ```bat
-git tag v2.3.0
-git push origin v2.3.0
+git tag v2.3.6
+git push origin v2.3.6
 ```
 
 Then mark the GitHub release as a prerelease for the beta channel.
 
-**Transfer modes** (radios above Run Transfer):
-- **None** — manual transfers only
-- **Auto-start** — run once after launch (delay is in Settings)
-- **Continuous** — keep transferring ready MP4s; the primary button becomes **Stop Transferring** (cancels in-progress work and returns to None)
 ## Config
 
-Settings are stored in `config.txt` next to the executable.
+Settings are stored in `%LocalAppData%\ODBC Recordings Transfer\config.txt`.
 
 ## Install
 

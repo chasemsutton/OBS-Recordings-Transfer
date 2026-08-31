@@ -10,7 +10,7 @@ namespace ODBC.RecordingsTransfer.Services;
 /// </summary>
 public class RemuxFileTracker
 {
-    public static readonly TimeSpan IncompleteAfterStable = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan IncompleteAfterStable = TimeSpan.FromSeconds(30);
 
     private readonly Dictionary<string, FileWatchState> _states = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _alertedIncomplete = new(StringComparer.OrdinalIgnoreCase);
@@ -83,6 +83,7 @@ public class RemuxFileTracker
         if (!checkEnabled)
         {
             _states.Remove(sourceFile);
+            _alertedIncomplete.Remove(fileName);
             return RemuxReadiness.Ready;
         }
 
@@ -105,12 +106,13 @@ public class RemuxFileTracker
 
         if (state.LastSize >= 0 && state.LastSize != size)
         {
-            // File is still growing.
+            // File is still growing (typical while cutting/copying into the source folder).
             state.LastSize = size;
             state.StableSinceUtc = null;
             state.HasMoov = false;
             state.MoovChecked = false;
-            state.Readiness = RemuxReadiness.Waiting;
+            state.DefinitiveMissingSinceUtc = null;
+            SetReadiness(state, RemuxReadiness.Waiting);
             return RemuxReadiness.Waiting;
         }
 
@@ -119,26 +121,52 @@ public class RemuxFileTracker
 
         state.StableSinceUtc ??= now;
 
-        if (!state.MoovChecked || !state.HasMoov)
+        var probe = Mp4MoovProbe.Probe(sourceFile);
+        switch (probe)
         {
-            state.HasMoov = Mp4MoovProbe.HasMoovAtom(sourceFile);
-            state.MoovChecked = true;
+            case MoovProbeResult.Found:
+                state.HasMoov = true;
+                state.MoovChecked = true;
+                state.DefinitiveMissingSinceUtc = null;
+                SetReadiness(state, RemuxReadiness.Ready);
+                return RemuxReadiness.Ready;
+
+            case MoovProbeResult.Unavailable:
+                // Locked/partial reads during copy must not count as "moov missing".
+                state.HasMoov = false;
+                state.MoovChecked = false;
+                state.DefinitiveMissingSinceUtc = null;
+                SetReadiness(state, RemuxReadiness.Waiting);
+                return RemuxReadiness.Waiting;
+
+            default:
+                state.HasMoov = false;
+                state.MoovChecked = true;
+                state.DefinitiveMissingSinceUtc ??= now;
+                break;
         }
 
-        if (state.HasMoov)
+        if (now - state.DefinitiveMissingSinceUtc.Value >= IncompleteAfterStable
+            && now - state.StableSinceUtc.Value >= IncompleteAfterStable)
         {
-            state.Readiness = RemuxReadiness.Ready;
-            return RemuxReadiness.Ready;
-        }
-
-        if (now - state.StableSinceUtc.Value >= IncompleteAfterStable)
-        {
-            state.Readiness = RemuxReadiness.Incomplete;
+            SetReadiness(state, RemuxReadiness.Incomplete);
             return RemuxReadiness.Incomplete;
         }
 
-        state.Readiness = RemuxReadiness.Waiting;
+        SetReadiness(state, RemuxReadiness.Waiting);
         return RemuxReadiness.Waiting;
+    }
+
+    private void SetReadiness(FileWatchState state, RemuxReadiness readiness)
+    {
+        if (state.Readiness == RemuxReadiness.Incomplete
+            && readiness != RemuxReadiness.Incomplete)
+        {
+            // Allow a fresh alert if the file looks stuck again later.
+            _alertedIncomplete.Remove(state.FileName);
+        }
+
+        state.Readiness = readiness;
     }
 
     public void PruneMissing(IEnumerable<string> existingSourcePaths)
@@ -158,6 +186,7 @@ public class RemuxFileTracker
         public string FileName { get; init; } = "";
         public long LastSize { get; set; } = -1;
         public DateTime? StableSinceUtc { get; set; }
+        public DateTime? DefinitiveMissingSinceUtc { get; set; }
         public bool MoovChecked { get; set; }
         public bool HasMoov { get; set; }
         public RemuxReadiness Readiness { get; set; } = RemuxReadiness.Waiting;

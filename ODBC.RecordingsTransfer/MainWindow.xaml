@@ -149,20 +149,21 @@
                         HorizontalAlignment="Stretch">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
-                            <RadioButton Content="None" GroupName="TransferMode"
+                            <RadioButton Content="Manual start" GroupName="TransferMode"
                                          IsChecked="{Binding IsTransferModeNone}"
-                                         Margin="0,0,20,0" Padding="0"
-                                         VerticalContentAlignment="Center"/>
+                                         Margin="0,0,18,0" Padding="0"
+                                         VerticalContentAlignment="Center"
+                                         ToolTip="Transfers run only when you click Run Transfer. Nothing starts automatically."/>
                             <RadioButton Content="Auto-start" GroupName="TransferMode"
                                          IsChecked="{Binding IsTransferModeAutoStart}"
-                                         Margin="0,0,20,0" Padding="0"
+                                         Margin="0,0,18,0" Padding="0"
                                          VerticalContentAlignment="Center"
-                                         ToolTip="Run a transfer automatically after the startup delay in Settings."/>
+                                         ToolTip="After launch, wait for the Auto-start delay in Settings, then run one transfer and stop."/>
                             <RadioButton Content="Continuous" GroupName="TransferMode"
                                          IsChecked="{Binding IsTransferModeContinuous}"
                                          Margin="0" Padding="0"
                                          VerticalContentAlignment="Center"
-                                         ToolTip="Keep transferring MP4 files as they become remux-ready."/>
+                                         ToolTip="After launch (and the Auto-start delay), keep watching for remux-ready MP4s and transfer them as they appear. Use Stop Transfer to return to Manual start."/>
                         </StackPanel>
 
                         <!-- Button row is centered on its own; status sits full-width below so long labels cannot shift/wrap it. -->
@@ -298,60 +299,56 @@
                     Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel MinWidth="0">
-                        <DockPanel LastChildFill="True" Margin="0,0,0,16">
-                            <Button DockPanel.Dock="Right" Content="Open Log Folder"
-                                    Command="{Binding OpenLogFolderCommand}" Background="#666666"
-                                    VerticalAlignment="Top" Margin="8,0,0,0"/>
-                            <StackPanel>
-                                <TextBlock Text="Settings" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4"/>
-                                <TextBlock Text="Transfer MP4 recordings and clean up old MKV files"
-                                           FontSize="13" Foreground="#666666" Margin="0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </DockPanel>
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="Settings" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,4"/>
+                            <TextBlock Text="Transfer MP4 recordings and clean up old MKV files"
+                                       FontSize="13" Foreground="#666666" Margin="0" TextWrapping="Wrap"/>
+                        </StackPanel>
 
-                        <TextBlock Text="Source Path"/>
-                        <DockPanel LastChildFill="True" Margin="0,0,0,8">
+                        <TextBlock Text="Source Path"
+                                   ToolTip="Folder where OBS writes remuxed MP4 (and MKV) recordings."/>
+                        <DockPanel LastChildFill="True" Margin="0,0,0,8"
+                                   ToolTip="Folder where OBS writes remuxed MP4 (and MKV) recordings.">
                             <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseSourceCommand}"
                                     Background="#666666" Margin="8,0,0,0"/>
                             <TextBox Text="{Binding SourcePath, UpdateSourceTrigger=PropertyChanged}" Margin="0"/>
                         </DockPanel>
 
-                        <TextBlock Text="Destination Path"/>
-                        <DockPanel LastChildFill="True" Margin="0,0,0,8">
+                        <TextBlock Text="Destination Path"
+                                   ToolTip="Folder where finished MP4 files are moved."/>
+                        <DockPanel LastChildFill="True" Margin="0,0,0,8"
+                                   ToolTip="Folder where finished MP4 files are moved.">
                             <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseDestinationCommand}"
                                     Background="#666666" Margin="8,0,0,0"/>
                             <TextBox Text="{Binding DestinationPath, UpdateSourceTrigger=PropertyChanged}" Margin="0"/>
                         </DockPanel>
 
                         <WrapPanel Margin="0,8,0,0">
-                            <StackPanel Margin="0,0,20,8">
+                            <StackPanel Margin="0,0,16,8"
+                                        ToolTip="Delete old MKV files older than this many days (when a matching MP4 exists).">
                                 <TextBlock Text="Max File Age (days)"/>
                                 <TextBox Text="{Binding MaxFileAgeDays, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
                             </StackPanel>
-                            <StackPanel Margin="0,0,20,8">
+                            <StackPanel Margin="0,0,16,8"
+                                        ToolTip="If free space on the source drive is below this, older MKVs may be deleted sooner to free space.">
                                 <TextBlock Text="Min Free Space (GB)"/>
                                 <TextBox Text="{Binding MinFreeSpaceGb, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
                             </StackPanel>
-                            <StackPanel Margin="0,0,0,8">
+                            <StackPanel Margin="0,0,16,8"
+                                        ToolTip="Seconds to wait after a successful transfer before closing the app. Use 0 to leave it open.">
                                 <TextBlock Text="Auto Close (sec, 0=off)"/>
                                 <TextBox Text="{Binding AutoCloseSeconds, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
                             </StackPanel>
+                            <StackPanel Margin="0,0,0,8"
+                                        ToolTip="Seconds to wait after launch before the first transfer in Auto-start or Continuous mode.">
+                                <TextBlock Text="Auto-start delay (sec)"/>
+                                <TextBox Text="{Binding AutoRunDelayText, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+                            </StackPanel>
                         </WrapPanel>
 
-                        <CheckBox Content="Wait for remux to finish before moving MP4s"
-                                  IsChecked="{Binding CheckRemuxComplete}"
-                                  Margin="0,4,0,8"
-                                  ToolTip="Detects OBS remux completion (stable file size + moov atom). Turn off for non-OBS remuxers."/>
-
                         <StackPanel Margin="0,4,0,0">
-                            <TextBlock Text="Auto-start delay (sec)" Margin="0,0,0,4"/>
-                            <TextBox Text="{Binding AutoRunDelayText, UpdateSourceTrigger=PropertyChanged}" Width="60"
-                                     HorizontalAlignment="Left"
-                                     ToolTip="Delay before the first transfer on launch for Auto-start and Continuous modes."/>
-                        </StackPanel>
-
-                        <StackPanel Margin="0,8,0,0">
-                            <TextBlock Text="Continuous mode" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <TextBlock Text="Continuous mode" FontWeight="SemiBold" Margin="0,0,0,4"
+                                       ToolTip="Optional launch behavior when using Continuous transfer mode."/>
                             <CheckBox Content="Start with Windows"
                                       IsChecked="{Binding StartWithWindows}"
                                       Margin="0,0,0,4"
@@ -362,29 +359,52 @@
                                       ToolTip="Open the window minimized (useful when starting with Windows)."/>
                         </StackPanel>
 
-                        <WrapPanel Margin="0,4,0,0">
-                            <CheckBox Content="Check for updates on startup" IsChecked="{Binding CheckForUpdatesOnStartup}"
-                                      VerticalAlignment="Center"/>
-                            <StackPanel Margin="0,0,16,0">
+                        <WrapPanel Margin="0,8,0,0">
+                            <CheckBox Content="Check for updates on startup"
+                                      IsChecked="{Binding CheckForUpdatesOnStartup}"
+                                      VerticalAlignment="Center"
+                                      ToolTip="Look for a newer app version each time the program starts."/>
+                            <StackPanel Margin="0,0,16,0"
+                                        ToolTip="Stable installs release builds; Beta can install or roll back among compatible beta builds.">
                                 <TextBlock Text="Update channel"/>
                                 <ComboBox ItemsSource="{Binding UpdateChannels}"
                                           SelectedItem="{Binding UpdateChannelName}"
                                           Width="100" Margin="0,0,0,8"/>
                             </StackPanel>
                             <Button Content="Check for Updates" Command="{Binding CheckForUpdatesCommand}"
-                                    Background="#3A6EA5" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                                    Background="#3A6EA5" VerticalAlignment="Center" Margin="0,0,0,8"
+                                    ToolTip="Check GitHub now for an update on the selected channel."/>
                         </WrapPanel>
 
-                        <CheckBox Content="Don't warn when destination folder year doesn't match current year"
-                                  IsChecked="{Binding SkipDestinationYearWarning}"
-                                  Margin="0,8,0,8"
-                                  ToolTip="When checked, the year mismatch prompt is skipped. Uncheck to show the warning again."/>
+                        <Expander Header="Advanced" IsExpanded="False" Margin="0,8,0,0"
+                                  ToolTip="Less-common options. Expand only if you need them.">
+                            <StackPanel Margin="0,10,0,0">
+                                <CheckBox Content="Wait for remux to finish before moving MP4s"
+                                          IsChecked="{Binding CheckRemuxComplete}"
+                                          Margin="0,0,0,8"
+                                          ToolTip="Detects OBS remux completion (stable file size + moov atom). Turn off for non-OBS remuxers."/>
+                                <CheckBox Content="Don't warn when destination folder year doesn't match current year"
+                                          IsChecked="{Binding SkipDestinationYearWarning}"
+                                          Margin="0,0,0,8"
+                                          ToolTip="When checked, the year mismatch prompt is skipped. Uncheck to show the warning again."/>
+                                <Button Content="Open Log Folder"
+                                        Command="{Binding OpenLogFolderCommand}"
+                                        Background="#666666"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,0,12"
+                                        ToolTip="Open the folder containing activity and error logs."/>
 
-                        <Expander Header="Advanced" IsExpanded="False" Margin="0,4,0,0">
-                            <StackPanel Margin="0,8,0,0">
-                                <CheckBox Content="Verify Transfer (MD5)" IsChecked="{Binding VerifyTransfer}"/>
-                                <CheckBox Content="Verify Remux (FFmpeg)" IsChecked="{Binding VerifyRemux}"
-                                          ToolTip="Full FFmpeg decode check at transfer time (slower). Separate from the lightweight remux wait above."/>
+                                <TextBlock Text="Unsupported / untested" FontWeight="SemiBold"
+                                           Foreground="#666666" Margin="0,4,0,6"
+                                           ToolTip="These checks are slower and not part of the normal workflow."/>
+                                <CheckBox Content="Verify Transfer (MD5)"
+                                          IsChecked="{Binding VerifyTransfer}"
+                                          Margin="0,0,0,4"
+                                          ToolTip="After copying, compare MD5 hashes of source and destination. Slower; not normally needed."/>
+                                <CheckBox Content="Verify Remux (FFmpeg)"
+                                          IsChecked="{Binding VerifyRemux}"
+                                          Margin="0,0,0,0"
+                                          ToolTip="Full FFmpeg decode check at transfer time (much slower). Separate from the lightweight remux wait above."/>
                             </StackPanel>
                         </Expander>
                     </StackPanel>

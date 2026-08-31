@@ -201,18 +201,12 @@ public class TransferService
                         readyMp4s.Add(mp4);
                         break;
                     case RemuxReadiness.Waiting:
-                        waitingMp4s.Add(mp4);
-                        break;
                     case RemuxReadiness.Incomplete:
-                        NotifyIncomplete(context, fileName);
-                        result.Left.Add(fileName);
-                        Report(new TransferProgressUpdate
-                        {
-                            Kind = TransferProgressUpdateKind.Skipped,
-                            FileName = fileName,
-                            ActionType = TransferActionType.Skip,
-                            Message = $"Skip (remux incomplete): {fileName}"
-                        });
+                        // Incomplete is a warning state (stable size, no moov yet). Keep polling —
+                        // in-progress copies into the source folder can look "stable" mid-write.
+                        waitingMp4s.Add(mp4);
+                        if (readiness == RemuxReadiness.Incomplete)
+                            NotifyIncomplete(context, fileName);
                         break;
                 }
             }
@@ -275,7 +269,7 @@ public class TransferService
             FileName = fileName,
             ActionType = TransferActionType.WaitingRemux,
             Progress = 0,
-            Message = $"Waiting for remux: {fileName}"
+            Message = $"Waiting for successful remux: {fileName}"
         });
 
         while (true)
@@ -307,25 +301,16 @@ public class TransferService
             }
 
             if (readiness == RemuxReadiness.Incomplete)
-            {
                 NotifyIncomplete(context, fileName);
-                report(new TransferProgressUpdate
-                {
-                    Kind = TransferProgressUpdateKind.Skipped,
-                    FileName = fileName,
-                    ActionType = TransferActionType.Skip,
-                    Message = $"Skip (remux incomplete): {fileName}"
-                });
-                return false;
-            }
 
+            // Stay on "waiting" — never mark remux delays as skipped; move on to other ready files first.
             report(new TransferProgressUpdate
             {
                 Kind = TransferProgressUpdateKind.Progress,
                 FileName = fileName,
                 ActionType = TransferActionType.WaitingRemux,
                 Progress = 0,
-                Message = "Waiting for remux..."
+                Message = "Waiting for successful remux..."
             });
 
             if (context?.CancellationToken.WaitHandle.WaitOne(RemuxPollInterval) == true)
@@ -376,15 +361,15 @@ public class TransferService
                 SourcePath = sourceFile,
                 ActionType = TransferActionType.WaitingRemux,
                 RemuxReadiness = RemuxReadiness.Waiting,
-                Description = $"Waiting for remux: {fileName}"
+                Description = $"Waiting for successful remux: {fileName}"
             },
             RemuxReadiness.Incomplete => new TransferActionPlan
             {
                 FileName = fileName,
                 SourcePath = sourceFile,
-                ActionType = TransferActionType.Skip,
+                ActionType = TransferActionType.WaitingRemux,
                 RemuxReadiness = RemuxReadiness.Incomplete,
-                Description = $"Skip (remux incomplete): {fileName}"
+                Description = $"Waiting for successful remux: {fileName}"
             },
             _ => new TransferActionPlan
             {
