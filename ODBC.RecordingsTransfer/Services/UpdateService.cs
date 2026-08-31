@@ -95,7 +95,7 @@ public class UpdateService
 
     public void LaunchInstaller(string installerPath)
     {
-        Process.Start(new ProcessStartInfo(installerPath) { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(installerPath, "/update") { UseShellExecute = true });
     }
 
     private static async Task<(JsonElement Root, string TagName)?> GetLatestStableReleaseAsync(CancellationToken cancellationToken)

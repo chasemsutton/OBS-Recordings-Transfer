@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
@@ -13,6 +14,22 @@ namespace ODBC.RecordingsTransfer.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
+    private static readonly HashSet<string> AutoSaveProperties = new(StringComparer.Ordinal)
+    {
+        nameof(SourcePath),
+        nameof(DestinationPath),
+        nameof(MaxFileAgeDays),
+        nameof(MinFreeSpaceGb),
+        nameof(AutoCloseSeconds),
+        nameof(VerifyTransfer),
+        nameof(VerifyRemux),
+        nameof(AutoRunOnStartup),
+        nameof(AutoRunDelayText),
+        nameof(CheckForUpdatesOnStartup),
+        nameof(UpdateChannelName),
+        nameof(SkipDestinationYearWarning)
+    };
+
     private readonly ConfigService _configService;
     private readonly LoggingService _loggingService;
     private readonly TransferService _transferService;
@@ -39,6 +56,7 @@ public class MainViewModel : ViewModelBase
     private int _movedCount;
     private int _deletedCount;
     private int _leftCount;
+    private bool _isLoadingSettings;
 
     public MainViewModel()
     {
@@ -53,10 +71,17 @@ public class MainViewModel : ViewModelBase
         TransferItems = new ObservableCollection<TransferActionViewModel>();
         UpdateChannels = new ObservableCollection<string> { "Stable", "Beta" };
 
+        PropertyChanged += (_, e) =>
+        {
+            if (_isLoadingSettings || e.PropertyName == null || !AutoSaveProperties.Contains(e.PropertyName))
+                return;
+
+            AutoSaveSettings();
+        };
+
         LoadSettings();
 
         RunTransferCommand = new RelayCommand(_ => _ = RunTransferAsync(), _ => !IsRunning);
-        SaveSettingsCommand = new RelayCommand(_ => SaveSettings());
         BrowseSourceCommand = new RelayCommand(_ => BrowseFolder(path => SourcePath = path));
         BrowseDestinationCommand = new RelayCommand(_ => BrowseFolder(path => DestinationPath = path));
         ClearLogCommand = new RelayCommand(_ => LogText = "");
@@ -194,7 +219,6 @@ public class MainViewModel : ViewModelBase
     }
 
     public ICommand RunTransferCommand { get; }
-    public ICommand SaveSettingsCommand { get; }
     public ICommand BrowseSourceCommand { get; }
     public ICommand BrowseDestinationCommand { get; }
     public ICommand ClearLogCommand { get; }
@@ -226,19 +250,27 @@ public class MainViewModel : ViewModelBase
 
     private void LoadSettings()
     {
-        var settings = _configService.Load();
-        SourcePath = settings.SourcePath;
-        DestinationPath = settings.DestinationPath;
-        MaxFileAgeDays = settings.MaxFileAgeDays;
-        MinFreeSpaceGb = settings.MinFreeSpaceGb;
-        AutoCloseSeconds = settings.AutoCloseSeconds;
-        VerifyTransfer = settings.VerifyTransfer;
-        VerifyRemux = settings.VerifyRemux;
-        AutoRunOnStartup = settings.AutoRunOnStartup;
-        AutoRunDelayText = settings.AutoRunDelaySeconds.ToString();
-        CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
-        UpdateChannelName = settings.UpdateChannel.ToString();
-        SkipDestinationYearWarning = settings.SkipDestinationYearWarning;
+        _isLoadingSettings = true;
+        try
+        {
+            var settings = _configService.Load();
+            SourcePath = settings.SourcePath;
+            DestinationPath = settings.DestinationPath;
+            MaxFileAgeDays = settings.MaxFileAgeDays;
+            MinFreeSpaceGb = settings.MinFreeSpaceGb;
+            AutoCloseSeconds = settings.AutoCloseSeconds;
+            VerifyTransfer = settings.VerifyTransfer;
+            VerifyRemux = settings.VerifyRemux;
+            AutoRunOnStartup = settings.AutoRunOnStartup;
+            AutoRunDelayText = settings.AutoRunDelaySeconds.ToString();
+            CheckForUpdatesOnStartup = settings.CheckForUpdatesOnStartup;
+            UpdateChannelName = settings.UpdateChannel.ToString();
+            SkipDestinationYearWarning = settings.SkipDestinationYearWarning;
+        }
+        finally
+        {
+            _isLoadingSettings = false;
+        }
     }
 
     public bool SkipDestinationYearWarning
@@ -247,11 +279,17 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _skipDestinationYearWarning, value);
     }
 
-    private void SaveSettings()
+    private void AutoSaveSettings()
     {
-        _configService.Save(ToSettings());
-        AppendLog("Settings saved.");
-        StatusText = "Settings saved";
+        try
+        {
+            _configService.Save(ToSettings());
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Could not save settings: {ex.Message}");
+            ErrorLogService.Write(ex);
+        }
     }
 
     private AppSettings ToSettings() => new()
@@ -381,15 +419,11 @@ public class MainViewModel : ViewModelBase
             return false;
 
         if (dialog.DontAskAgain)
-        {
             SkipDestinationYearWarning = true;
-            _configService.Save(ToSettings());
-        }
 
         if (dialog.Result == DestinationConfirmResult.UpdateYear)
         {
             DestinationPath = DestinationPathValidator.UpdateYearInPath(DestinationPath, currentYear);
-            _configService.Save(ToSettings());
             AppendLog($"Destination path year updated to {currentYear}: {DestinationPath}");
         }
 

@@ -10,7 +10,7 @@ internal static class Program
 {
     private const string AppName = "ODBC Recordings Transfer";
     private const string ExeName = "ODBC Recordings Transfer.exe";
-    private const string Version = "2.1.3";
+    private const string Version = "2.1.4";
     private const string Publisher = "Open Door Baptist Church";
     private const string UninstallKeyName = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8F4E2A91-6C3D-4B7E-9F1A-2D5E8C0B4A73}";
 
@@ -19,17 +19,37 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
 
-        var installDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            AppName);
-
         if (args.Any(a => a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase)
                        || a.Equals("-uninstall", StringComparison.OrdinalIgnoreCase)))
         {
+            var installDir = GetInstallDirectory() ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                AppName);
             return Uninstall(installDir);
         }
 
-        return Install(installDir);
+        if (args.Any(a => a.Equals("/update", StringComparison.OrdinalIgnoreCase)
+                       || a.Equals("-update", StringComparison.OrdinalIgnoreCase)))
+        {
+            var existingDir = GetInstallDirectory();
+            if (existingDir != null)
+                return Update(existingDir);
+        }
+
+        var defaultInstallDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            AppName);
+        return Install(defaultInstallDir);
+    }
+
+    private static string? GetInstallDirectory()
+    {
+        using var key = Registry.LocalMachine.OpenSubKey(UninstallKeyName);
+        var location = key?.GetValue("InstallLocation") as string;
+        if (string.IsNullOrWhiteSpace(location) || !Directory.Exists(location))
+            return null;
+
+        return location.TrimEnd('\\');
     }
 
     private static int Install(string installDir)
@@ -46,18 +66,7 @@ internal static class Program
 
         try
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "ODBC-Recordings-Setup-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempDir);
-
-            try
-            {
-                ExtractPayload(tempDir);
-                CopyPayload(tempDir, installDir);
-            }
-            finally
-            {
-                try { Directory.Delete(tempDir, true); } catch { /* best effort */ }
-            }
+            DeployPayload(installDir);
 
             var exePath = Path.Combine(installDir, ExeName);
             CreateShortcut(
@@ -93,6 +102,75 @@ internal static class Program
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             return 1;
+        }
+    }
+
+    private static int Update(string installDir)
+    {
+        try
+        {
+            StopRunningApp();
+            DeployPayload(installDir);
+            RegisterUninstall(installDir);
+
+            var exePath = Path.Combine(installDir, ExeName);
+            CreateShortcut(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), AppName + ".lnk"),
+                exePath);
+
+            MessageBox.Show(
+                "Installation complete.",
+                AppName,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            if (File.Exists(exePath))
+            {
+                Process.Start(new ProcessStartInfo(exePath) { UseShellExecute = true });
+            }
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Update failed:\n\n{ex.Message}",
+                AppName,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return 1;
+        }
+    }
+
+    private static void DeployPayload(string installDir)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "ODBC-Recordings-Setup-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            ExtractPayload(tempDir);
+            CopyPayload(tempDir, installDir);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { /* best effort */ }
+        }
+    }
+
+    private static void StopRunningApp()
+    {
+        foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExeName)))
+        {
+            try
+            {
+                process.Kill();
+                process.WaitForExit(5000);
+            }
+            catch
+            {
+                // ignore
+            }
         }
     }
 
