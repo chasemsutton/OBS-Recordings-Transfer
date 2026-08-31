@@ -482,7 +482,7 @@ public class MainViewModel : ViewModelBase
             while (!token.IsCancellationRequested)
             {
                 await Task.Delay(QueueRefreshIntervalMs, token);
-                if (_isClosing || IsRunning)
+                if (_isClosing)
                     continue;
 
                 try
@@ -531,7 +531,7 @@ public class MainViewModel : ViewModelBase
 
     private async Task RefreshTransferQueueAsync(bool logToActivity)
     {
-        if (_isClosing || IsRunning)
+        if (_isClosing)
             return;
 
         if (Interlocked.CompareExchange(ref _queueRefreshRunning, 1, 0) != 0)
@@ -552,10 +552,16 @@ public class MainViewModel : ViewModelBase
                 return;
             }
 
-            if (_isClosing || IsRunning)
+            if (_isClosing)
                 return;
 
-            ApplyPlanToQueue(plan, logToActivity);
+            // While a transfer is running, only refresh pending rows (e.g. remux → move)
+            // so in-progress progress/history are not wiped.
+            if (IsRunning)
+                UpdatePendingQueueFromPlan(plan);
+            else
+                ApplyPlanToQueue(plan, logToActivity);
+
             ShowRemuxIncompleteAlerts();
         }
         finally
@@ -620,6 +626,31 @@ public class MainViewModel : ViewModelBase
 
         if (plan.Count == 0 && logToActivity)
             AppendLog("No file actions planned.");
+    }
+
+    /// <summary>
+    /// Updates pending queue rows from a fresh plan without touching in-progress or history items.
+    /// Lets remux-ready files flip to Move while an earlier file is still copying.
+    /// </summary>
+    private void UpdatePendingQueueFromPlan(List<TransferActionPlan> plan)
+    {
+        var pendingByName = TransferItems
+            .Where(i => i.Status == TransferActionStatus.Pending)
+            .GroupBy(i => i.FileName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var planItem in plan)
+        {
+            if (!pendingByName.TryGetValue(planItem.FileName, out var item))
+                continue;
+
+            if (item.ActionType == planItem.ActionType
+                && string.Equals(item.Label, planItem.Description, StringComparison.Ordinal))
+                continue;
+
+            item.ActionType = planItem.ActionType;
+            item.Label = planItem.Description;
+        }
     }
 
     private static bool ActivePlansMatch(IReadOnlyList<TransferActionViewModel> active, List<TransferActionPlan> plan)

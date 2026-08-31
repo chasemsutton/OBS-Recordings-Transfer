@@ -86,8 +86,8 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
-                    <TextBlock Grid.Column="1" Text="{Binding Label}" FontFamily="Consolas" FontSize="12"
-                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Label}" FontFamily="Consolas" FontSize="11"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
                 </Grid>
                 <Grid Margin="18,4,0,0">
                     <Grid.Style>
