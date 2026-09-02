@@ -56,8 +56,10 @@ public class MainViewModel : ViewModelBase
     private CancellationTokenSource? _continuousCts;
     private CancellationTokenSource? _queueRefreshCts;
     private CancellationTokenSource? _queueRefreshDebounceCts;
+    private CancellationTokenSource? _destinationWriteCheckCts;
     private bool _isClosing;
     private int _queueRefreshRunning;
+    private DestinationReachabilityStatus _lastDestinationExistsStatus = DestinationReachabilityStatus.NotConfigured;
     private const int QueueRefreshIntervalMs = 3000;
     private const int ContinuousPollIntervalMs = 3000;
 
@@ -116,6 +118,9 @@ public class MainViewModel : ViewModelBase
 
             if (QueueRefreshProperties.Contains(e.PropertyName))
                 ScheduleQueueRefresh();
+
+            if (e.PropertyName == nameof(DestinationPath))
+                ScheduleDestinationWriteCheck();
         };
 
         LoadSettings();
@@ -436,6 +441,7 @@ public class MainViewModel : ViewModelBase
         if (!FFmpegService.IsAvailable())
             AppendLog("Note: FFmpeg not found. Remux validation will be skipped unless FFmpeg is installed.");
 
+        await RunDestinationWriteCheckAsync(alertOnFailure: true);
         await RefreshTransferQueueAsync(logToActivity: false);
         StartQueueRefreshLoop();
 
@@ -501,6 +507,7 @@ public class MainViewModel : ViewModelBase
                 try
                 {
                     await RefreshTransferQueueAsync(logToActivity: false);
+                    await RunDestinationExistsCheckAsync(alertOnTransition: true);
                 }
                 catch
                 {
@@ -540,6 +547,121 @@ public class MainViewModel : ViewModelBase
                 // Ignore dispatcher/shutdown races while typing a path.
             }
         }, token);
+    }
+
+    private void ScheduleDestinationWriteCheck()
+    {
+        if (_isLoadingSettings)
+            return;
+
+        _destinationWriteCheckCts?.Cancel();
+        _destinationWriteCheckCts = new CancellationTokenSource();
+        var token = _destinationWriteCheckCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(400, token);
+                if (token.IsCancellationRequested || _isClosing)
+                    return;
+
+                await RunDestinationWriteCheckAsync(alertOnFailure: true);
+            }
+            catch (OperationCanceledException)
+            {
+                // expected when another change arrives before the delay finishes
+            }
+        }, token);
+    }
+
+    private async Task RunDestinationWriteCheckAsync(bool alertOnFailure)
+    {
+        if (_isClosing)
+            return;
+
+        var path = DestinationPath;
+        var status = await Task.Run(() => DestinationReachabilityService.CheckWriteAccess(path));
+
+        if (_isClosing)
+            return;
+
+        if (status == DestinationReachabilityStatus.NotConfigured)
+        {
+            _lastDestinationExistsStatus = DestinationReachabilityStatus.NotConfigured;
+            return;
+        }
+
+        _lastDestinationExistsStatus = status switch
+        {
+            DestinationReachabilityStatus.Reachable => DestinationReachabilityStatus.Reachable,
+            DestinationReachabilityStatus.Unreachable => DestinationReachabilityStatus.Unreachable,
+            _ => DestinationReachabilityStatus.Reachable
+        };
+
+        if (!alertOnFailure || status == DestinationReachabilityStatus.Reachable)
+            return;
+
+        ShowDestinationReachabilityAlert(status, path);
+    }
+
+    private async Task RunDestinationExistsCheckAsync(bool alertOnTransition)
+    {
+        if (_isClosing)
+            return;
+
+        var path = DestinationPath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            _lastDestinationExistsStatus = DestinationReachabilityStatus.NotConfigured;
+            return;
+        }
+
+        var status = await Task.Run(() => DestinationReachabilityService.CheckExists(path));
+
+        if (_isClosing)
+            return;
+
+        var previous = _lastDestinationExistsStatus;
+        _lastDestinationExistsStatus = status;
+
+        if (!alertOnTransition
+            || status != DestinationReachabilityStatus.Unreachable
+            || previous is not (DestinationReachabilityStatus.Reachable or DestinationReachabilityStatus.NoWritePermission))
+            return;
+
+        ShowDestinationReachabilityAlert(DestinationReachabilityStatus.Unreachable, path);
+    }
+
+    private void ShowDestinationReachabilityAlert(DestinationReachabilityStatus status, string path)
+    {
+        var (title, message) = status switch
+        {
+            DestinationReachabilityStatus.NoWritePermission => (
+                "Destination Write Permission",
+                $"The destination folder is reachable but the app does not have write permission.\n\nDestination:\n{path}"),
+            _ => (
+                "Destination Unreachable",
+                $"The destination folder is unreachable.\n\nDestination:\n{path}")
+        };
+
+        var logLine = status == DestinationReachabilityStatus.NoWritePermission
+            ? $"Destination write permission error: {path}"
+            : $"Destination folder unreachable: {path}";
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess())
+        {
+            AppendLog(logLine);
+            System.Windows.MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        dispatcher.Invoke(() =>
+        {
+            AppendLog(logLine);
+            System.Windows.MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        });
     }
 
     private async Task RefreshTransferQueueAsync(bool logToActivity)
@@ -859,6 +981,7 @@ public class MainViewModel : ViewModelBase
         _autoSaveCts?.Cancel();
         _queueRefreshCts?.Cancel();
         _queueRefreshDebounceCts?.Cancel();
+        _destinationWriteCheckCts?.Cancel();
     }
 
     private void LoadSettings()

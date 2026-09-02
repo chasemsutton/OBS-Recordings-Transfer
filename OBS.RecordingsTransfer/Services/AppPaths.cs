@@ -19,6 +19,7 @@ public static class AppPaths
     public static string LogFile => Path.Combine(AppDataDirectory, "logfile.txt");
     public static string ErrorFile => Path.Combine(AppDataDirectory, "programError.txt");
     public static string FfmpegErrorLog => Path.Combine(AppDataDirectory, "error.log");
+    public static string IncompleteTransferFile => Path.Combine(AppDataDirectory, "incomplete-transfer.txt");
 
     private static string LegacyConfigFile => Path.Combine(AppContext.BaseDirectory, "config.txt");
 

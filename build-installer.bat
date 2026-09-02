@@ -5,7 +5,7 @@ set ROOT=%~dp0
 set PUBLISH=%ROOT%publish
 set PAYLOAD=%ROOT%OBS.RecordingsTransfer.Installer\Payload
 set OUTPUT=%ROOT%installer-output
-set FFMPEG_SRC=C:\Users\chase\OneDrive - Open Door Baptist Church (1)\Public\Media Ministry\Software\Custom Made Programs\Transfer Recordings Program\Transfer Recordings Application\FFmpeg
+set FFMPEG_SRC=%ROOT%FFmpeg
 
 echo ============================================
 echo  OBS Recordings Transfer - Full Build

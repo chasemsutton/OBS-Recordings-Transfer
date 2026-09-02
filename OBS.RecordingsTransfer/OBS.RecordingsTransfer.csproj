@@ -10,12 +10,12 @@
     <ApplicationIcon>transfer_icon.ico</ApplicationIcon>
     <AssemblyName>OBS Recordings Transfer</AssemblyName>
     <RootNamespace>OBS.RecordingsTransfer</RootNamespace>
-    <Version>2.3.8</Version>
-    <AssemblyVersion>2.3.8.0</AssemblyVersion>
-    <FileVersion>2.3.8.0</FileVersion>
-    <InformationalVersion>2.3.8</InformationalVersion>
+    <Version>2.3.9</Version>
+    <AssemblyVersion>2.3.9.0</AssemblyVersion>
+    <FileVersion>2.3.9.0</FileVersion>
+    <InformationalVersion>2.3.9</InformationalVersion>
     <RepositoryUrl>https://github.com/chasemsutton/OBS-Recordings-Transfer</RepositoryUrl>
-    <Company>Open Door Baptist Church</Company>
+    <Company>chasemsutton</Company>
     <Product>OBS Recordings Transfer</Product>
     <Description>Transfer MP4 recordings and clean up old MKV files</Description>
   </PropertyGroup>

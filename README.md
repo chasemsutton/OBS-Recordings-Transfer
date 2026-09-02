@@ -1,6 +1,6 @@
 # OBS Recordings Transfer
 
-Windows desktop app for Open Door Baptist Church Media Ministry. Transfers remuxed OBS MP4 recordings from a source folder to a destination and cleans up old MKV files.
+Windows desktop app that transfers remuxed OBS MP4 recordings from a source folder to a destination and cleans up old MKV files.
 
 ## Features
 
@@ -71,14 +71,14 @@ Run `installer-output\OBS Recordings Transfer Setup.exe` (or download the latest
 
 ### Windows Application Control blocked the app?
 
-If you see **"An Application Control policy has blocked this file"**, the install usually still succeeded. The PC is blocking unsigned executables (common on church/media workstations with AppLocker, WDAC, or Smart App Control).
+If you see **"An Application Control policy has blocked this file"**, the install usually still succeeded. Windows may block unsigned executables (for example with Smart App Control on Windows 11, or AppLocker/WDAC on managed PCs).
 
-**On the media PC right now:** check the Start Menu for **OBS Recordings Transfer** — the app may already be at `C:\Program Files\OBS Recordings Transfer\`.
+**Right now:** check the Start Menu for **OBS Recordings Transfer** — the app may already be at `C:\Program Files\OBS Recordings Transfer\`.
 
-**To allow it permanently**, your IT admin needs one of:
+**To run it without the warning**, you may need one of:
 
-1. **Whitelist the install path** — allow `C:\Program Files\OBS Recordings Transfer\OBS Recordings Transfer.exe`
-2. **Code signing** — sign the exe with an organization code-signing certificate (best long-term fix)
-3. **Smart App Control** — if enabled on Windows 11, it blocks unsigned apps until IT adds an exception
+1. **Allow the install path** — add an exception for `C:\Program Files\OBS Recordings Transfer\OBS Recordings Transfer.exe`
+2. **Code signing** — a signed build avoids most of these prompts (requires a code-signing certificate)
+3. **Smart App Control** — on Windows 11, turn it off in Settings or allow the app when prompted
 
-The installer itself may also be blocked until IT allows it or the app is signed.
+The installer itself may also be blocked until you allow it or use a signed build.

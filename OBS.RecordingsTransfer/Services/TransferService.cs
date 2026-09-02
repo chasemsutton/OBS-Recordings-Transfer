@@ -11,6 +11,7 @@ public class TransferService
 {
     private const string Mp4Extension = ".mp4";
     private const string MkvExtension = ".mkv";
+    private const string PartialFilePrefix = "Partial-";
     private const int CopyBufferSize = 81920;
     private static readonly TimeSpan RemuxPollInterval = TimeSpan.FromSeconds(1);
 
@@ -213,6 +214,8 @@ public class TransferService
         {
             ThrowIfCanceled();
 
+            TryRecoverIncompleteTransfer(settings, result, context, Report, ThrowIfCanceled);
+
             if (!Directory.Exists(settings.SourcePath) || !Directory.Exists(settings.DestinationPath))
             {
                 var error = "Source or destination path does not exist.";
@@ -402,14 +405,18 @@ public class TransferService
 
         if (targetNames.Contains(fileName))
         {
-            plan.Add(new TransferActionPlan
+            var destFile = Path.Combine(settings.DestinationPath, fileName);
+            if (IsDestinationComplete(sourceFile, destFile))
             {
-                FileName = fileName,
-                SourcePath = sourceFile,
-                ActionType = TransferActionType.Skip,
-                Description = $"Skip (already at destination): {fileName}"
-            });
-            return;
+                plan.Add(new TransferActionPlan
+                {
+                    FileName = fileName,
+                    SourcePath = sourceFile,
+                    ActionType = TransferActionType.Skip,
+                    Description = $"Skip (already at destination): {fileName}"
+                });
+                return;
+            }
         }
 
         var readiness = _remuxTracker.Evaluate(
@@ -515,12 +522,16 @@ public class TransferService
         HashSet<string?> targetNames,
         TransferResult result,
         TransferContext? context,
-        Action<TransferProgressUpdate> report)
+        Action<TransferProgressUpdate> report,
+        string? destinationPathOverride = null)
     {
+        var destinationPath = destinationPathOverride ?? settings.DestinationPath;
         var fileName = Path.GetFileName(sourceFile)!;
+        var destFile = Path.Combine(destinationPath, fileName);
 
-        if (targetNames.Contains(fileName))
+        if (targetNames.Contains(fileName) && IsDestinationComplete(sourceFile, destFile))
         {
+            IncompleteTransferStore.Clear();
             result.Left.Add(fileName);
             report(new TransferProgressUpdate
             {
@@ -576,15 +587,41 @@ public class TransferService
             return;
         }
 
-        var destFile = Path.Combine(settings.DestinationPath, fileName);
         var retry = true;
+        var forceRestart = false;
 
         while (retry)
         {
             try
             {
                 if (File.Exists(destFile))
-                    File.Delete(destFile);
+                {
+                    if (!forceRestart && IsDestinationComplete(sourceFile, destFile))
+                    {
+                        IncompleteTransferStore.Clear();
+                        result.Left.Add(fileName);
+                        report(new TransferProgressUpdate
+                        {
+                            Kind = TransferProgressUpdateKind.Skipped,
+                            FileName = fileName,
+                            ActionType = TransferActionType.Skip,
+                            Message = $"Skipped (already at destination): {fileName}"
+                        });
+                        return;
+                    }
+
+                    if (!TryRenameIncompleteDestination(destinationPath, fileName, message => report(new TransferProgressUpdate
+                    {
+                        Kind = TransferProgressUpdateKind.Log,
+                        FileName = fileName,
+                        Message = message
+                    })))
+                    {
+                        throw new IOException($"Could not rename incomplete destination file: {fileName}");
+                    }
+                }
+
+                IncompleteTransferStore.Save(sourceFile, destinationPath, fileName, fileSize);
 
                 CopyFileWithProgress(sourceFile, destFile, (copied, total) => report(new TransferProgressUpdate
                 {
@@ -628,8 +665,7 @@ public class TransferService
                         retry = context?.ConfirmRetry?.Invoke(fileName) ?? false;
                         if (retry)
                         {
-                            if (File.Exists(destFile))
-                                File.Delete(destFile);
+                            forceRestart = true;
                             continue;
                         }
 
@@ -661,6 +697,7 @@ public class TransferService
                     Message = "Removing original..."
                 });
                 File.Delete(sourceFile);
+                IncompleteTransferStore.Clear();
                 result.Moved.Add(fileName);
                 targetNames.Add(fileName);
                 report(new TransferProgressUpdate
@@ -696,7 +733,114 @@ public class TransferService
                     });
                     return;
                 }
+
+                forceRestart = true;
             }
+        }
+    }
+
+    private void TryRecoverIncompleteTransfer(
+        AppSettings settings,
+        TransferResult result,
+        TransferContext? context,
+        Action<TransferProgressUpdate> report,
+        Action throwIfCanceled)
+    {
+        var state = IncompleteTransferStore.TryLoad();
+        if (state == null)
+            return;
+
+        void Log(string message) => report(new TransferProgressUpdate
+        {
+            Kind = TransferProgressUpdateKind.Log,
+            Message = message
+        });
+
+        if (!File.Exists(state.SourcePath))
+        {
+            IncompleteTransferStore.Clear();
+            Log("Cleared interrupted transfer state (source file missing).");
+            return;
+        }
+
+        var sourceSize = new FileInfo(state.SourcePath).Length;
+        if (sourceSize != state.SourceSize)
+        {
+            IncompleteTransferStore.Clear();
+            Log($"Cleared interrupted transfer state (source file size changed): {state.FileName}");
+            return;
+        }
+
+        if (!Directory.Exists(state.DestinationPath))
+        {
+            Log($"Interrupted transfer waiting for destination: {state.FileName}");
+            return;
+        }
+
+        var destFile = Path.Combine(state.DestinationPath, state.FileName);
+        var destSize = File.Exists(destFile) ? new FileInfo(destFile).Length : 0;
+
+        if (destSize >= sourceSize)
+        {
+            IncompleteTransferStore.Clear();
+            Log($"Interrupted transfer already complete at destination (manual copy assumed): {state.FileName}");
+            return;
+        }
+
+        throwIfCanceled();
+        Log($"Restarting interrupted transfer: {state.FileName}");
+
+        ProcessMp4(
+            state.SourcePath,
+            settings,
+            new HashSet<string?>(StringComparer.OrdinalIgnoreCase),
+            result,
+            context,
+            report,
+            state.DestinationPath);
+    }
+
+    private static bool IsDestinationComplete(string sourceFile, string destFile)
+    {
+        if (!File.Exists(destFile))
+            return false;
+
+        try
+        {
+            var sourceSize = new FileInfo(sourceFile).Length;
+            var destSize = new FileInfo(destFile).Length;
+            return destSize >= sourceSize;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string ToPartialFileName(string fileName) => PartialFilePrefix + fileName;
+
+    private static bool TryRenameIncompleteDestination(string destinationPath, string fileName, Action<string>? log)
+    {
+        var destFile = Path.Combine(destinationPath, fileName);
+        if (!File.Exists(destFile))
+            return false;
+
+        var partialFileName = ToPartialFileName(fileName);
+        var partialPath = Path.Combine(destinationPath, partialFileName);
+
+        try
+        {
+            if (File.Exists(partialPath))
+                File.Delete(partialPath);
+
+            File.Move(destFile, partialPath, overwrite: true);
+            log?.Invoke($"Renamed incomplete destination file to {partialFileName}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            log?.Invoke($"Could not rename incomplete destination file: {ex.Message}");
+            return false;
         }
     }
 

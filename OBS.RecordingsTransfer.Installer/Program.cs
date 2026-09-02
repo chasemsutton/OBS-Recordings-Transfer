@@ -10,8 +10,8 @@ internal static class Program
 {
     private const string AppName = "OBS Recordings Transfer";
     private const string ExeName = "OBS Recordings Transfer.exe";
-    private const string Version = "2.3.8";
-    private const string Publisher = "Open Door Baptist Church";
+    private const string Version = "2.3.9";
+    private const string Publisher = "chasemsutton";
     private const string UninstallKeyName = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8F4E2A91-6C3D-4B7E-9F1A-2D5E8C0B4A73}";
 
     [STAThread]

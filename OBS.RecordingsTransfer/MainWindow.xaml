@@ -464,8 +464,6 @@
         <DockPanel Grid.Row="2"
                    Visibility="{Binding ShowSettingsPanel, Converter={StaticResource BoolToVis}}">
             <TextBlock Text="{Binding AppVersion}" FontSize="11" Foreground="#AAAAAA" DockPanel.Dock="Left"/>
-            <TextBlock Text="Open Door Baptist Church - Media Ministry" FontSize="11"
-                       Foreground="#AAAAAA" HorizontalAlignment="Right" DockPanel.Dock="Right" Margin="0,8,0,0"/>
         </DockPanel>
     </Grid>
 </Window>
