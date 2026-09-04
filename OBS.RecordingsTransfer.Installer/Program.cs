@@ -10,7 +10,9 @@ internal static class Program
 {
     private const string AppName = "OBS Recordings Transfer";
     private const string ExeName = "OBS Recordings Transfer.exe";
-    private const string Version = "2.3.9";
+    private const string LegacyAppName = "ODBC Recordings Transfer";
+    private const string LegacyExeName = "ODBC Recordings Transfer.exe";
+    private const string Version = "2.3.10";
     private const string Publisher = "chasemsutton";
     private const string UninstallKeyName = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8F4E2A91-6C3D-4B7E-9F1A-2D5E8C0B4A73}";
 
@@ -22,9 +24,7 @@ internal static class Program
         if (args.Any(a => a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase)
                        || a.Equals("-uninstall", StringComparison.OrdinalIgnoreCase)))
         {
-            var installDir = GetInstallDirectory() ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                AppName);
+            var installDir = GetInstallDirectory() ?? GetDefaultInstallDirectory();
             return Uninstall(installDir);
         }
 
@@ -36,11 +36,11 @@ internal static class Program
                 return Update(existingDir);
         }
 
-        var defaultInstallDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            AppName);
-        return Install(defaultInstallDir);
+        return Install(GetDefaultInstallDirectory());
     }
+
+    private static string GetDefaultInstallDirectory() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), AppName);
 
     private static string? GetInstallDirectory()
     {
@@ -66,7 +66,19 @@ internal static class Program
 
         try
         {
+            var legacyDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                LegacyAppName);
+            if (Directory.Exists(legacyDir)
+                && !string.Equals(legacyDir, installDir, StringComparison.OrdinalIgnoreCase))
+            {
+                StopRunningApp();
+                TryDeleteDirectory(legacyDir);
+                RemoveShortcut(LegacyAppName);
+            }
+
             DeployPayload(installDir);
+            RemoveLegacyFiles(installDir);
 
             var exePath = Path.Combine(installDir, ExeName);
             CreateShortcut(
@@ -110,16 +122,39 @@ internal static class Program
         try
         {
             StopRunningApp();
-            DeployPayload(installDir);
-            RegisterUninstall(installDir);
 
-            var exePath = Path.Combine(installDir, ExeName);
+            var targetDir = GetDefaultInstallDirectory();
+            var migrating = !string.Equals(installDir, targetDir, StringComparison.OrdinalIgnoreCase);
+
+            DeployPayload(targetDir);
+            RemoveLegacyFiles(targetDir);
+
+            if (migrating)
+                TryDeleteDirectory(installDir);
+
+            RegisterUninstall(targetDir);
+
+            var exePath = Path.Combine(targetDir, ExeName);
+            RemoveShortcut(LegacyAppName);
             CreateShortcut(
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), AppName + ".lnk"),
                 exePath);
 
+            var legacyDesktop = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+                LegacyAppName + ".lnk");
+            if (File.Exists(legacyDesktop))
+            {
+                File.Delete(legacyDesktop);
+                CreateShortcut(
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), AppName + ".lnk"),
+                    exePath);
+            }
+
+            MigrateStartupEntry();
+
             MessageBox.Show(
-                "Update complete.\n\nYou can launch the program now.",
+                "Update complete.\n\nYou can launch OBS Recordings Transfer now.",
                 AppName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -155,17 +190,53 @@ internal static class Program
 
     private static void StopRunningApp()
     {
-        foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExeName)))
+        foreach (var processName in new[]
+                 {
+                     Path.GetFileNameWithoutExtension(ExeName),
+                     Path.GetFileNameWithoutExtension(LegacyExeName)
+                 })
         {
-            try
+            foreach (var process in Process.GetProcessesByName(processName))
             {
-                process.Kill();
-                process.WaitForExit(5000);
+                try
+                {
+                    process.Kill();
+                    process.WaitForExit(5000);
+                }
+                catch
+                {
+                    // ignore
+                }
             }
-            catch
-            {
-                // ignore
-            }
+        }
+    }
+
+    private static void RemoveLegacyFiles(string installDir)
+    {
+        TryDeleteFile(Path.Combine(installDir, LegacyExeName));
+        TryDeleteFile(Path.Combine(installDir, Path.ChangeExtension(LegacyExeName, ".pdb")));
+    }
+
+    private static void MigrateStartupEntry()
+    {
+        try
+        {
+            using var runKey = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
+            if (runKey == null)
+                return;
+
+            var legacy = runKey.GetValue(LegacyAppName) as string;
+            if (string.IsNullOrWhiteSpace(legacy))
+                return;
+
+            runKey.SetValue(AppName, legacy.Replace(LegacyExeName, ExeName, StringComparison.OrdinalIgnoreCase)
+                .Replace(LegacyAppName, AppName, StringComparison.OrdinalIgnoreCase));
+            runKey.DeleteValue(LegacyAppName, throwOnMissingValue: false);
+        }
+        catch
+        {
+            // Best-effort only.
         }
     }
 
@@ -189,24 +260,18 @@ internal static class Program
 
         try
         {
-            foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExeName)))
-            {
-                try { process.Kill(); process.WaitForExit(5000); } catch { /* ignore */ }
-            }
+            StopRunningApp();
+            TryDeleteDirectory(installDir);
 
-            Directory.Delete(installDir, true);
+            var legacyDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                LegacyAppName);
+            if (Directory.Exists(legacyDir)
+                && !string.Equals(legacyDir, installDir, StringComparison.OrdinalIgnoreCase))
+                TryDeleteDirectory(legacyDir);
 
-            var startMenuLink = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
-                AppName + ".lnk");
-            if (File.Exists(startMenuLink))
-                File.Delete(startMenuLink);
-
-            var desktopLink = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
-                AppName + ".lnk");
-            if (File.Exists(desktopLink))
-                File.Delete(desktopLink);
+            RemoveShortcut(AppName);
+            RemoveShortcut(LegacyAppName);
 
             using var key = Registry.LocalMachine.OpenSubKey(UninstallKeyName, writable: true);
             key?.Close();
@@ -216,8 +281,8 @@ internal static class Program
             {
                 using var runKey = Registry.CurrentUser.OpenSubKey(
                     @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
-                runKey?.DeleteValue("OBS Recordings Transfer", throwOnMissingValue: false);
-                runKey?.DeleteValue("ODBC Recordings Transfer", throwOnMissingValue: false);
+                runKey?.DeleteValue(AppName, throwOnMissingValue: false);
+                runKey?.DeleteValue(LegacyAppName, throwOnMissingValue: false);
             }
             catch
             {
@@ -245,7 +310,7 @@ internal static class Program
             throw new InvalidOperationException("Installer payload is missing. Rebuild using build-installer.bat.");
 
         using var stream = assembly.GetManifestResourceStream(resourceName)!;
-        var zipPath = Path.Combine(Path.GetTempPath(), "odbc-payload-" + Guid.NewGuid().ToString("N") + ".zip");
+        var zipPath = Path.Combine(Path.GetTempPath(), "obs-payload-" + Guid.NewGuid().ToString("N") + ".zip");
         try
         {
             using (var file = File.Create(zipPath))
@@ -286,6 +351,42 @@ internal static class Program
 
         if (Marshal.IsComObject(shell))
             Marshal.ReleaseComObject(shell);
+    }
+
+    private static void RemoveShortcut(string shortcutAppName)
+    {
+        TryDeleteFile(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+            shortcutAppName + ".lnk"));
+        TryDeleteFile(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+            shortcutAppName + ".lnk"));
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, true);
+        }
+        catch
+        {
+            // Best effort — leftover files are cleaned on next uninstall if needed.
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        {
+            // Best effort only.
+        }
     }
 
     private static void WriteDefaultConfig(string installDir)
