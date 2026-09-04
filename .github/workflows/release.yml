@@ -38,14 +38,20 @@ jobs:
           cd OBS.RecordingsTransfer.Installer
           dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ..\installer-output
 
-      - name: Prepare release asset
+      - name: Prepare release assets
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          Copy-Item "installer-output\OBS Recordings Transfer Setup.exe" "installer-output\OBS-Recordings-Transfer-Setup-$version.exe"
+          $source = "installer-output\OBS Recordings Transfer Setup.exe"
+          # Current branding — used by OBS Recordings Transfer clients.
+          Copy-Item $source "installer-output\OBS-Recordings-Transfer-Setup-$version.exe"
+          # Legacy branding — used by older stable (ODBC) clients updating to a newer beta/release.
+          Copy-Item $source "installer-output\ODBC-Recordings-Transfer-Setup-$version.exe"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: installer-output/OBS-Recordings-Transfer-Setup-*.exe
+          files: |
+            installer-output/OBS-Recordings-Transfer-Setup-*.exe
+            installer-output/ODBC-Recordings-Transfer-Setup-*.exe
           generate_release_notes: true
