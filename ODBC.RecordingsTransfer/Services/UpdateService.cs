@@ -36,7 +36,7 @@ public class UpdateService
             {
                 return UpdateCheckResult.Failed(
                     $"Version {version} is available, but no installer file was found in the GitHub release. " +
-                    "Expected a file starting with \"ODBC-Recordings-Transfer-Setup\".");
+                    "Expected a file starting with \"OBS-Recordings-Transfer-Setup\".");
             }
 
             var notes = release.Value.Root.TryGetProperty("body", out var body)
@@ -160,14 +160,9 @@ public class UpdateService
 
     private static bool IsInstallerAsset(string name)
     {
-        if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        if (name.StartsWith(UpdateConfig.InstallerAssetPrefix, StringComparison.OrdinalIgnoreCase)
-            && name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        return name.Contains("Recordings Transfer Setup", StringComparison.OrdinalIgnoreCase);
+        return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            && name.StartsWith(UpdateConfig.InstallerAssetPrefix, StringComparison.OrdinalIgnoreCase)
+            && name.Contains("Setup", StringComparison.OrdinalIgnoreCase);
     }
 
     private static HttpClient CreateClient()
